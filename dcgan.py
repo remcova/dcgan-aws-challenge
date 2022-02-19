@@ -112,7 +112,7 @@ class DCGAN:
 
         print('Total "cataract" images : ', len(cataract_list))
 
-        cat_df = self.process_data(cataract_list, training_data_folder, 1)
+        cat_df = self.process_data(cataract_list, training_data_folder)
 
         return cat_df
 
