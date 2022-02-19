@@ -116,7 +116,7 @@ class DCGAN:
 
         return cat_df
 
-    def rescale_data(data_image_list: np.array) -> np.array:
+    def rescale_data(self, data_image_list: np.array) -> np.array:
         min_max = tf.keras.layers.experimental.preprocessing.Rescaling(1.0 / 127.5, offset=-1)
         processed_data = min_max(data_image_list)
 
