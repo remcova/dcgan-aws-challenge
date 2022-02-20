@@ -469,8 +469,8 @@ class DCGAN:
         # The combined model  (stacked generator and discriminator) takes
         # noise as input => generates images => determines validity
 
-        combined = Model(z, valid)
-        combined.compile(loss="binary_crossentropy", optimizer=optimizer)
+        self.combined = Model(z, valid)
+        self.combined.compile(loss="binary_crossentropy", optimizer=optimizer)
 
         # Train the network
         self.train(data=X, epochs=100, batch_size=self.batch_size, save_interval=10)
