@@ -49,8 +49,9 @@ tnp.experimental_enable_numpy_behavior()
 class DCGAN:
     def __init__(self):
         # Hyperparameters
-        self.img_size = 256
+        self.epochs = 1000
         self.batch_size = 12
+        self.img_size = 256
         self.latent_dim = 256
 
         self.img_shape = (self.img_size, self.img_size, 3)
@@ -61,6 +62,7 @@ class DCGAN:
         self.combined = None
 
         # Save interval for generated samples
+        self.save_interval = 10
         self.samples_am = 5
 
     def download_data(self):
@@ -468,7 +470,7 @@ class DCGAN:
         self.combined.compile(loss="binary_crossentropy", optimizer=optimizer)
 
         # Train the network
-        self.train(data=X, epochs=100, batch_size=self.batch_size, save_interval=10)
+        self.train(data=X, epochs=self.epochs, batch_size=self.batch_size, save_interval=self.save_interval)
 
         # Save model for future use to generate fake images
         self.gen.save("models/output_model.h5")
