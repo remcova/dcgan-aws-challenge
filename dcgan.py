@@ -49,6 +49,10 @@ from tensorflow.python.client import device_lib
 
 print(device_lib.list_local_devices())
 
+config = ConfigProto()
+config.gpu_options.allow_growth = True
+sess = InteractiveSession(config=config)
+
 
 class DCGAN:
     def __init__(self):
