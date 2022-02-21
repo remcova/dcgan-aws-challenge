@@ -1,6 +1,6 @@
 import os
 import time
-from PIL import Image
+from datetime import datetime
 import pathlib
 import tensorflow as tf
 from random import shuffle
@@ -17,36 +17,27 @@ from tensorflow.keras.layers import (
     MaxPool2D,
     Dropout,
 )
-from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
 from tensorflow.compat.v1 import ConfigProto, InteractiveSession
-import scipy.special as sc
-import scipy.stats as stats
-from scipy import signal
-import math
 import tensorflow.experimental.numpy as tnp
 import matplotlib.pyplot as plt
 import numpy as np
-import pydot
-import random
 import pandas as pd
 from tqdm import tqdm
 import cv2 as cv
-import multiprocessing
 import opendatasets as od
 
 # Load Habana
 from habana_frameworks.tensorflow import load_habana_module
-
 load_habana_module()
-
 
 # Enable numpy behavior for TF
 tnp.experimental_enable_numpy_behavior()
 
+# GPU Config
 from tensorflow.python.client import device_lib
-
 print(device_lib.list_local_devices())
 
 config = ConfigProto()
@@ -481,7 +472,9 @@ class DCGAN:
         self.train(data=X, epochs=self.epochs, batch_size=self.batch_size, save_interval=self.save_interval)
 
         # Save model for future use to generate fake images
-        self.gen.save("models/output_model.h5")
+        now = datetime.now()
+        datetime_str = now.strftime("%d/%m/%Y%H:%M:%S")
+        self.gen.save(f"models/{datetime_str}_output_model.h5")
 
         # Release resources from GPU memory
         K.clear_session()
