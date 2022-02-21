@@ -352,10 +352,8 @@ class DCGAN:
             # Based on uniform distribution. Output will be of size (batch size, latent_dim)
             noise = np.random.uniform(-1, 1, size=[batch_size, self.latent_dim])
 
-            # The generator wants the discriminator to label the generated samples
-            # as valid (ones)
-            # This is where the genrator is trying to trick discriminator into believing
-            # the generated image is true (hence value of 1 for y)
+            # The generator wants the discriminator to label the generated samples as valid (ones)
+            # This is where the generator is trying to trick the discriminator into believing tha tthe generated image is true
             valid_y = np.array([1] * batch_size)
 
             # Generator is part of combined where it got directly linked with the discriminator
@@ -364,10 +362,7 @@ class DCGAN:
             # job of fooling the discriminator then the output would be 1 (true)
             g_loss = self.combined.train_on_batch(noise, valid_y)
 
-            # Additionally, in order for us to keep track of our training process, we print the
-            # progress and save the sample image output depending on the epoch interval specified.
             # Plot the progress
-
             accuracy = 100 * d_loss[1]
             print(
                 f"Epoch: {epoch}, [d_avg_loss: {d_loss[0]}, d_loss_fake: {d_loss_fake[0]}, d_loss_real: {d_loss_real[0]}, acc.: {accuracy}] [generator Loss: {g_loss}]"
@@ -414,7 +409,7 @@ class DCGAN:
         for k in range(self.samples_am):
             plt.subplot(2, 5, k + 1)
             plt.imshow(np.uint8(255 * (x_fake[k].reshape(self.img_size, self.img_size, 3))))
-            plt.savefig(f"{epoch}_samples.png")
+            plt.savefig(f"generated_samples/{epoch}_samples.png")
             plt.xticks([])
             plt.yticks([])
 
@@ -426,7 +421,7 @@ class DCGAN:
         Save model checkpoint
         :param epoch: Used for in the filename for the checkpoint model.
         """
-        self.gen.save(f"{epoch}_checkpoint_model.h5")
+        self.gen.save(f"checkpoints/{epoch}_checkpoint_model.h5")
 
     def run(self):
         """
@@ -476,7 +471,7 @@ class DCGAN:
         self.train(data=X, epochs=100, batch_size=self.batch_size, save_interval=10)
 
         # Save model for future use to generate fake images
-        self.gen.save("generator_model.h5")
+        self.gen.save("models/output_model.h5")
 
         # Release resources from GPU memory
         K.clear_session()
