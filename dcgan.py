@@ -70,6 +70,11 @@ class DCGAN:
         now = datetime.now()
         self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
+        # Create required directories for saving results from this run
+        os.mkdir(f"models/{self.datetime}")
+        os.mkdir(f"checkpoints/{self.datetime}")
+        os.mkdir(f"generated_samples/{self.datetime}")
+
     def download_data(self):
         """
         Download Required Data
@@ -416,7 +421,7 @@ class DCGAN:
         for k in range(self.samples_am):
             plt.subplot(2, 5, k + 1)
             plt.imshow(np.uint8(255 * (x_fake[k].reshape(self.img_size, self.img_size, 3))))
-            plt.savefig(f"generated_samples/{self.datetime}/{epoch}_samples.png")
+            plt.savefig(os.path.join(f"generated_samples/{self.datetime}/{epoch}_samples.png"))
             plt.xticks([])
             plt.yticks([])
 
@@ -428,7 +433,7 @@ class DCGAN:
         Save model checkpoint
         :param epoch: Used for in the filename for the checkpoint model.
         """
-        self.gen.save(f"checkpoints/{self.datetime}/{epoch}_checkpoint_model.h5")
+        self.gen.save(os.path.join(f"checkpoints/{self.datetime}/{epoch}_checkpoint_model.h5"))
 
     def run(self):
         """
@@ -478,7 +483,7 @@ class DCGAN:
         self.train(data=X, epochs=self.epochs, batch_size=self.batch_size, save_interval=self.save_interval)
 
         # Save model for future use to generate fake images
-        self.gen.save(f"models/{self.datetime}/output_model.h5")
+        self.gen.save(os.path.join(f"models/{self.datetime}/output_model.h5"))
 
         # Release resources from GPU memory
         K.clear_session()
