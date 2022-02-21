@@ -31,6 +31,7 @@ import opendatasets as od
 
 # Load Habana
 from habana_frameworks.tensorflow import load_habana_module
+
 load_habana_module()
 
 # Enable numpy behavior for TF
@@ -38,6 +39,7 @@ tnp.experimental_enable_numpy_behavior()
 
 # GPU Config
 from tensorflow.python.client import device_lib
+
 print(device_lib.list_local_devices())
 
 config = ConfigProto()
@@ -63,6 +65,10 @@ class DCGAN:
         # Save interval for generated samples
         self.save_interval = 10
         self.samples_am = 5
+
+        # Get date and time of current run
+        now = datetime.now()
+        self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
     def download_data(self):
         """
@@ -410,7 +416,7 @@ class DCGAN:
         for k in range(self.samples_am):
             plt.subplot(2, 5, k + 1)
             plt.imshow(np.uint8(255 * (x_fake[k].reshape(self.img_size, self.img_size, 3))))
-            plt.savefig(f"generated_samples/{epoch}_samples.png")
+            plt.savefig(f"generated_samples/{self.datetime}/{epoch}_samples.png")
             plt.xticks([])
             plt.yticks([])
 
@@ -422,7 +428,7 @@ class DCGAN:
         Save model checkpoint
         :param epoch: Used for in the filename for the checkpoint model.
         """
-        self.gen.save(f"checkpoints/{epoch}_checkpoint_model.h5")
+        self.gen.save(f"checkpoints/{self.datetime}/{epoch}_checkpoint_model.h5")
 
     def run(self):
         """
@@ -472,9 +478,7 @@ class DCGAN:
         self.train(data=X, epochs=self.epochs, batch_size=self.batch_size, save_interval=self.save_interval)
 
         # Save model for future use to generate fake images
-        now = datetime.now()
-        datetime_str = now.strftime("%d/%m/%Y%H:%M:%S")
-        self.gen.save(f"models/{datetime_str}_output_model.h5")
+        self.gen.save(f"models/{self.datetime}/output_model.h5")
 
         # Release resources from GPU memory
         K.clear_session()
