@@ -45,6 +45,10 @@ load_habana_module()
 # Enable numpy behavior for TF
 tnp.experimental_enable_numpy_behavior()
 
+from tensorflow.python.client import device_lib
+
+print(device_lib.list_local_devices())
+
 
 class DCGAN:
     def __init__(self):
