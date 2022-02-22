@@ -1,50 +1,40 @@
+from gc import callbacks
 import os
+import glob
+import pathlib
 import time
 from datetime import datetime
-import pathlib
-import tensorflow as tf
 from random import shuffle
-from sklearn.preprocessing import OneHotEncoder
-from tensorflow.keras.layers import (
-    Input,
-    Dense,
-    Reshape,
-    Flatten,
-    BatchNormalization,
-    LeakyReLU,
-    Conv2D,
-    Conv2DTranspose,
-    MaxPool2D,
-    Dropout,
-)
-from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras import backend as K
-from tensorflow.compat.v1 import ConfigProto, InteractiveSession
-import tensorflow.experimental.numpy as tnp
+
+import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-from tqdm import tqdm
-import cv2 as cv
 import opendatasets as od
+import pandas as pd
+import tensorflow as tf
+import tensorflow.experimental.numpy as tnp
 
-# Load Habana
-from habana_frameworks.tensorflow import load_habana_module
+from tensorflow.compat.v1 import ConfigProto, InteractiveSession
 
-load_habana_module()
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import (BatchNormalization, Conv2D,
+                                     Conv2DTranspose, Dense, Dropout, Flatten,
+                                     Input, LeakyReLU, Reshape)
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
+from tqdm import tqdm
 
-# Enable numpy behavior for TF
-tnp.experimental_enable_numpy_behavior()
-
-# GPU Config
 from tensorflow.python.client import device_lib
 
 print(device_lib.list_local_devices())
 
+# GPU config
 config = ConfigProto()
 config.gpu_options.allow_growth = True
 sess = InteractiveSession(config=config)
+
+# Enable numpy behavior for TF
+tnp.experimental_enable_numpy_behavior()
 
 
 class DCGAN:
@@ -62,25 +52,44 @@ class DCGAN:
         self.gen = None
         self.combined = None
 
+        # Make use of HPU
+        self.use_hpu = True
+
+        # Configurable data type
+        self.data_type = np.float32
+
         # Save interval for generated samples
         self.save_interval = 10
         self.samples_am = 5
+
+        # Save interval for model checkpoint
+        self.save_checkpoint_interval = 25
 
         # Get date and time of current run
         now = datetime.now()
         self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
+        # Get latest checkpoint directory
+        self.latest_checkpoint_dir = max(glob.glob(os.path.join('checkpoints', '*/')), key=os.path.getmtime)
+
         # Create required directories for saving results from this run
-        os.mkdir(f"models/{self.datetime}")
-        os.mkdir(f"checkpoints/{self.datetime}")
-        os.mkdir(f"generated_samples/{self.datetime}")
+        self.model_dir = os.path.join(f"models/{self.datetime}")
+        os.mkdir(self.model_dir)
+        
+        self.checkpoint_dir = os.path.join(f"checkpoints/{self.datetime}")
+        os.mkdir(self.checkpoint_dir)
+
+        self.samples_dir = os.path.join(f"generated_samples/{self.datetime}")
+        os.mkdir(self.samples_dir)
 
     def download_data(self):
         """
         Download Required Data
         """
-        od.download("https://www.kaggle.com/andrewmvd/ocular-disease-recognition-odir5k")
-        data_dir = pathlib.Path("/content/ocular-disease-recognition-odir5k/ODIR-5K/ODIR-5K/Training Images/")
+        od.download(
+            "https://www.kaggle.com/andrewmvd/ocular-disease-recognition-odir5k")
+        data_dir = pathlib.Path(
+            "/content/ocular-disease-recognition-odir5k/ODIR-5K/ODIR-5K/Training Images/")
 
     def process_data(self, data_image_list: list, data_folder: str) -> list:
         """
@@ -94,7 +103,8 @@ class DCGAN:
             path = os.path.join(data_folder, img)
             img = cv.imread(path)
             img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-            img = cv.resize(img, (self.img_size, self.img_size), interpolation=cv.INTER_NEAREST)
+            img = cv.resize(img, (self.img_size, self.img_size),
+                            interpolation=cv.INTER_NEAREST)
             data_df.append([np.array(img)])
         shuffle(data_df)
         return data_df
@@ -130,14 +140,20 @@ class DCGAN:
         """
         Prepare dataset
         """
-        training_data_folder = os.path.join("./ocular-disease-recognition-odir5k/ODIR-5K/ODIR-5K/Training Images")
-        df = pd.read_csv(os.path.join("./ocular-disease-recognition-odir5k/", "full_df.csv"))
+        training_data_folder = os.path.join(
+            "./ocular-disease-recognition-odir5k/ODIR-5K/ODIR-5K/Training Images")
+        df = pd.read_csv(os.path.join(
+            "./ocular-disease-recognition-odir5k/", "full_df.csv"))
 
-        df["left_cataract"] = df["Left-Diagnostic Keywords"].apply(lambda x: self.has_cataract(x))
-        df["right_cataract"] = df["Right-Diagnostic Keywords"].apply(lambda x: self.has_cataract(x))
+        df["left_cataract"] = df["Left-Diagnostic Keywords"].apply(
+            lambda x: self.has_cataract(x))
+        df["right_cataract"] = df["Right-Diagnostic Keywords"].apply(
+            lambda x: self.has_cataract(x))
 
-        left_cataract = df.loc[(df.C == 1) & (df.left_cataract == 1)]["Left-Fundus"].values
-        right_cataract = df.loc[(df.C == 1) & (df.right_cataract == 1)]["Right-Fundus"].values
+        left_cataract = df.loc[(df.C == 1) & (
+            df.left_cataract == 1)]["Left-Fundus"].values
+        right_cataract = df.loc[(df.C == 1) & (
+            df.right_cataract == 1)]["Right-Fundus"].values
 
         print("Number of images in left cataract: {}".format(len(left_cataract)))
         print("Number of images in right cataract: {}".format(len(right_cataract)))
@@ -156,7 +172,8 @@ class DCGAN:
         :param data_image_list: Data to rescale
         :returns: Processed data_image_list
         """
-        min_max = tf.keras.layers.experimental.preprocessing.Rescaling(1.0 / 127.5, offset=-1)
+        min_max = tf.keras.layers.experimental.preprocessing.Rescaling(
+            1.0 / 127.5, offset=-1)
         processed_data = min_max(data_image_list)
 
         return processed_data
@@ -172,13 +189,12 @@ class DCGAN:
         # Visualize Training Set
         self.show_images(train)
 
-        # Split Training Set into X, Y
-        X = np.array([i[0] for i in train]).astype("float32").reshape(-1, self.img_size, self.img_size, 3)
+        # Split Training Set into X
+        X = np.array([i[0] for i in train]).astype(
+            self.data_type).reshape(-1, self.img_size, self.img_size, 3)
 
         # Normalize Training Data (MinMax Scaling)
         X = self.rescale_data(X)
-
-        print(f"X Shape : {X.shape}")
 
         return X
 
@@ -195,32 +211,38 @@ class DCGAN:
         model.add(Reshape((4, 4, 128)))
 
         # upsample to 8x8
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(256, kernel_size=3,
+                  strides=2, padding="same", use_bias=False))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
 
         # upsample to 16x16
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(256, kernel_size=3,
+                  strides=2, padding="same", use_bias=False))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
 
         # upsample to 32x32
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(256, kernel_size=3,
+                  strides=2, padding="same", use_bias=False))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
 
         # upsample to 64x64
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(256, kernel_size=3,
+                  strides=2, padding="same", use_bias=False))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
 
         # upsample to 128x128
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(256, kernel_size=3,
+                  strides=2, padding="same", use_bias=False))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
 
         # upsample to 256x256
-        model.add(Conv2DTranspose(512, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(512, kernel_size=3,
+                  strides=2, padding="same", use_bias=False))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
 
@@ -243,7 +265,8 @@ class DCGAN:
         model = tf.keras.Sequential()
 
         # normal 256x256
-        model.add(Conv2D(128, kernel_size=3, padding="same", input_shape=(self.img_size, self.img_size, 3)))
+        model.add(Conv2D(128, kernel_size=3, padding="same",
+                  input_shape=(self.img_size, self.img_size, 3)))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.3))
 
@@ -312,7 +335,7 @@ class DCGAN:
 
         half_batch = int(batch_size / 2)
 
-        # Array initialization for logging of the losses
+        # Array init for loss logging
         d_loss_logs_r = []
         d_loss_logs_f = []
         g_loss_logs = []
@@ -334,9 +357,10 @@ class DCGAN:
 
             # Generate noise by using a uniform distribution
             # Additionally, the generator uses the hyperbolic tangent (tanh) activation function
-            # in the output layer and inputs to the generator and discriminator are scaled to the range [-1, 1].
+            # in the output layer, and inputs to the generator & discriminator are scaled to the range [-1, 1].
 
-            noise = np.random.uniform(-1, 1, size=[half_batch, self.latent_dim])
+            noise = np.random.uniform(-1, 1,
+                                      size=[half_batch, self.latent_dim])
 
             # Generate a batch of fake images
             gen_imgs = self.gen.predict_on_batch(noise)
@@ -349,29 +373,28 @@ class DCGAN:
             d_loss_real = self.disc.train_on_batch(imgs, valid)
             d_loss_fake = self.disc.train_on_batch(gen_imgs, fake)
 
-            # take average loss from real and fake images.
+            # Take average loss from real and fake images.
             d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
-
-            # And within the same loop we train our Generator, by setting the input noise and
-            # ultimately training the Generator to have the Discriminator label its samples as valid
-            # by specifying the gradient loss.
 
             # ---------------------
             #  Train Generator
             # ---------------------
-            # Create noise vectors as input for generator.
+            # Within the same loop we train the Generator, by setting the input noise and
+            # ultimately training the Generator to have the Discriminator label its samples as valid
+
             # Create as many noise vectors as defined by the batch size.
             # Based on uniform distribution. Output will be of size (batch size, latent_dim)
-            noise = np.random.uniform(-1, 1, size=[batch_size, self.latent_dim])
+            noise = np.random.uniform(-1, 1,
+                                      size=[batch_size, self.latent_dim])
 
             # The generator wants the discriminator to label the generated samples as valid (ones)
-            # This is where the generator is trying to trick the discriminator into believing tha tthe generated image is true
+            # This is where the generator is trying to trick the discriminator into believing that the generated image is true
             valid_y = np.array([1] * batch_size)
 
             # Generator is part of combined where it got directly linked with the discriminator
             # Train the generator with noise as x and 1 as y.
             # Again, 1 as the output as it is adversarial and if generator did a great
-            # job of fooling the discriminator then the output would be 1 (true)
+            # job of fooling the discriminator, then the output would be 1 (true)
             g_loss = self.combined.train_on_batch(noise, valid_y)
 
             # Plot the progress
@@ -399,9 +422,12 @@ class DCGAN:
         g_loss_logs_a = np.array(g_loss_logs)
 
         # At the end of training plot the losses vs epochs
-        plt.plot(d_loss_logs_r_a[:, 0], d_loss_logs_r_a[:, 1], label="Discriminator Loss - Real")
-        plt.plot(d_loss_logs_f_a[:, 0], d_loss_logs_f_a[:, 1], label="Discriminator Loss - Fake")
-        plt.plot(g_loss_logs_a[:, 0], g_loss_logs_a[:, 1], label="Generator Loss")
+        plt.plot(d_loss_logs_r_a[:, 0], d_loss_logs_r_a[:,
+                 1], label="Discriminator Loss - Real")
+        plt.plot(d_loss_logs_f_a[:, 0], d_loss_logs_f_a[:,
+                 1], label="Discriminator Loss - Fake")
+        plt.plot(g_loss_logs_a[:, 0],
+                 g_loss_logs_a[:, 1], label="Generator Loss")
         plt.xlabel("Epochs")
         plt.ylabel("Loss")
         plt.legend()
@@ -414,14 +440,16 @@ class DCGAN:
         Show Samples
         :param epoch: Amount of epochs. Used to save in filename for the generated sample.
         """
-        # generate noise input by using uniform distribution
-        noise = np.random.uniform(-1, 1, size=[self.samples_am, self.latent_dim])
+        noise = np.random.uniform(-1, 1,
+                                  size=[self.samples_am, self.latent_dim])
         x_fake = self.gen.predict(noise)
 
         for k in range(self.samples_am):
             plt.subplot(2, 5, k + 1)
-            plt.imshow(np.uint8(255 * (x_fake[k].reshape(self.img_size, self.img_size, 3))))
-            plt.savefig(os.path.join(f"generated_samples/{self.datetime}/{epoch}_samples.png"))
+            plt.imshow(
+                np.uint8(255 * (x_fake[k].reshape(self.img_size, self.img_size, 3))))
+            plt.savefig(os.path.join(
+                self.samples_dir, f"{epoch}_samples.png"))
             plt.xticks([])
             plt.yticks([])
 
@@ -433,27 +461,47 @@ class DCGAN:
         Save model checkpoint
         :param epoch: Used for in the filename for the checkpoint model.
         """
-        self.gen.save(os.path.join(f"checkpoints/{self.datetime}/{epoch}_checkpoint_model.h5"))
+        self.gen.save(os.path.join(
+            self.checkpoint_dir, f"{epoch}_checkpoint_model.h5"))
+
+    def setup_hpu(self):
+        # Load habana module
+        from habana_frameworks.tensorflow import load_habana_module
+        load_habana_module()
+
+        # Init horovod
+        import horovod.tensorflow.keras as hvd
+        hvd.init()
+
+        # Configure computing data type
+        self.data_type = tf.bfloat16.as_numpy_dtype # used for creating training set
+        tf.keras.mixed_precision.set_global_policy('mixed_bfloat16') # used for in the network architecture
 
     def run(self):
         """
         Run DCGAN
         """
+        # Gaudi Config
+        if self.use_hpu:
+            self.setup_hpu()
+
         # Create Dataset
         X = self.create_dataset()
 
-        generator_optimizer = Adam(2e-4, beta_1=0.5)
+        generator_optimizer = Adam(4e-4, beta_1=0.5) # was first 2e-4
         discriminator_optimizer = Adam(2e-4, beta_1=0.5)
         optimizer = Adam(2e-4, beta_1=0.5)
 
         # Build and compile the discriminator first.
         # Generator will be trained as part of the combined model later on.
         self.disc = self.discriminator()
-        self.disc.compile(loss="binary_crossentropy", optimizer=discriminator_optimizer, metrics=["accuracy"])
+        self.disc.compile(loss="binary_crossentropy",
+                          optimizer=discriminator_optimizer, metrics=["accuracy"])
 
         # Since we are only generating (faking) images, we do not track any metrics.
         self.gen = self.generator()
-        self.gen.compile(loss="binary_crossentropy", optimizer=generator_optimizer)
+        self.gen.compile(loss="binary_crossentropy",
+                         optimizer=generator_optimizer)
 
         # This builds the Generator and defines the input noise.
         # In a GAN the Generator network takes noise Z as an input to produce its images.
@@ -476,14 +524,28 @@ class DCGAN:
         # The combined model  (stacked generator and discriminator) takes
         # noise as input => generates images => determines validity
 
+        # Create checkpoint model for the adverserial network
+        cp_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join(self.checkpoint_dir, 'checkpoint.ckpt'),
+            verbose=1,
+            save_weights_only=True,
+            save_freq=self.save_checkpoint_interval)
+
+        # Get the latest checkpoint model
+        latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
+
         self.combined = Model(z, valid)
-        self.combined.compile(loss="binary_crossentropy", optimizer=optimizer)
+        if latest != None:
+            self.combined.load_weights(latest)
+        self.combined.compile(loss="binary_crossentropy",
+                              optimizer=optimizer, callbacks=[cp_callback])
 
         # Train the network
-        self.train(data=X, epochs=self.epochs, batch_size=self.batch_size, save_interval=self.save_interval)
+        self.train(data=X, epochs=self.epochs,
+                   batch_size=self.batch_size, save_interval=self.save_interval)
 
         # Save model for future use to generate fake images
-        self.gen.save(os.path.join(f"models/{self.datetime}/output_model.h5"))
+        self.gen.save(os.path.join(self.model_dir, "output_model.h5"))
 
         # Release resources from GPU memory
         K.clear_session()
