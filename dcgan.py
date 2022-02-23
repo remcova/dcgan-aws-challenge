@@ -550,9 +550,13 @@ class DCGAN:
 
             if latest != None:
                 self.combined.load_weights(latest)
-        self.combined.compile(
-            loss="binary_crossentropy", optimizer=optimizer, callbacks=[cp_callback]
-        )
+            self.combined.compile(
+                loss="binary_crossentropy", optimizer=optimizer, callbacks=[cp_callback]
+            )
+        else:
+            self.combined.compile(
+                loss="binary_crossentropy", optimizer=optimizer, callbacks=[cp_callback]
+            )
 
         # Train the network
         self.train(
