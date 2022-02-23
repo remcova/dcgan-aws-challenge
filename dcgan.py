@@ -66,8 +66,8 @@ class DCGAN:
         self.data_type = np.float32
 
         # Required models for GAN
-        self.disc = self.discriminator()
-        self.gen = self.generator()
+        self.disc = None
+        self.gen = None
         self.combined = None
 
         # Save interval for generated samples
@@ -271,7 +271,7 @@ class DCGAN:
         """
         model = tf.keras.Sequential()
 
-        # normal 256x256
+        # input 256x256
         model.add(
             Conv2D(
                 128,
@@ -488,6 +488,7 @@ class DCGAN:
 
         # Build and compile the discriminator first.
         # Generator will be trained as part of the combined model later on.
+        self.disc = self.discriminator()
         self.disc.compile(
             loss="binary_crossentropy",
             optimizer=discriminator_optimizer,
@@ -495,6 +496,7 @@ class DCGAN:
         )
 
         # Since we are only generating (faking) images, we do not track any metrics.
+        self.gen = self.generator()
         self.gen.compile(loss="binary_crossentropy", optimizer=generator_optimizer)
 
         # This builds the Generator and defines the input noise.
