@@ -36,6 +36,7 @@ from tqdm import tqdm
 # Enable numpy behavior for TF
 tnp.experimental_enable_numpy_behavior()
 
+
 class DCGAN:
     def __init__(self):
         # Make use of HPU
@@ -65,7 +66,7 @@ class DCGAN:
 
         # Use latest model checkpoint
         self.use_checkpoint = False
-        
+
         # Save interval for model checkpoint
         self.save_checkpoint_interval = 25
 
@@ -235,7 +236,15 @@ class DCGAN:
                     dim, kernel_size=3, strides=2, padding="same", use_bias=False
                 )
             )
-            model.add(Norm())
+            model.add(
+                Norm(
+                    axis=3,
+                    center=True,
+                    scale=True,
+                    beta_initializer="random_uniform",
+                    gamma_initializer="random_uniform",
+                )
+            )
             model.add(LeakyReLU(alpha=0.2))
 
         # output
@@ -312,7 +321,7 @@ class DCGAN:
         # Load the dataset
         X_train = np.stack(data, axis=0)
 
-        # Define a half batch size for the discriminator 
+        # Define a half batch size for the discriminator
         # First half for real images, second half for fake images.
         half_batch = int(batch_size / 2)
 
@@ -442,6 +451,7 @@ class DCGAN:
     def load_habana_framework(self):
         # Load habana module
         from habana_frameworks.tensorflow import load_habana_module
+
         load_habana_module()
 
         # Init horovod
@@ -547,17 +557,11 @@ class DCGAN:
         elif norm == "batch_norm":
             return BatchNormalization(momentum=0.8)
         elif norm == "instance_norm":
-            # Experimental results show that instance normalization performs well on 
-            # style transfer when replacing batch normalization. 
-            # Recently, instance normalization has also been used as a replacement for 
+            # Experimental results show that instance normalization performs well on
+            # style transfer when replacing batch normalization.
+            # Recently, instance normalization has also been used as a replacement for
             # batch normalization in GANs.
-            return tfa.layers.InstanceNormalization(
-                axis=3, 
-                center=True, 
-                scale=True,
-                beta_initializer="random_uniform",
-                gamma_initializer="random_uniform"
-            )
+            return tfa.layers.InstanceNormalization()
         elif norm == "layer_norm":
             return LayerNormalization()
 
