@@ -256,9 +256,6 @@ class DCGAN:
         model.add(Flatten())
         model.add(Dense(1, activation="sigmoid"))
 
-        # cast to float32
-        model.add(tf.cast(model, tf.float32))
-
         model.summary()
 
         input = Input(shape=(self.img_size, self.img_size, 3))
