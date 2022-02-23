@@ -555,7 +555,7 @@ class DCGAN:
             )
         else:
             self.combined.compile(
-                loss="binary_crossentropy", optimizer=optimizer, callbacks=[cp_callback]
+                loss="binary_crossentropy", optimizer=optimizer
             )
 
         # Train the network
