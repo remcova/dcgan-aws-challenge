@@ -1,4 +1,4 @@
 {
-    "editor.fontSize": 13,
+    "editor.fontSize": 12,
     "python.defaultInterpreterPath": "/opt/homebrew/Caskroom/miniforge/base/envs/tf/bin/python"
 }

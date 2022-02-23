@@ -1,4 +1,3 @@
-from gc import callbacks
 import os
 import glob
 import pathlib
@@ -13,12 +12,15 @@ import opendatasets as od
 import pandas as pd
 import tensorflow as tf
 import tensorflow.experimental.numpy as tnp
+from tensorflow_addons.tfa import InstanceNormalization
 
+from habana_frameworks.tensorflow.ops.instance_norm import HabanaInstanceNormalization
 from tensorflow.compat.v1 import ConfigProto, InteractiveSession
 
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import (
     BatchNormalization,
+    LayerNormalization,
     Conv2D,
     Conv2DTranspose,
     Dense,
@@ -32,11 +34,11 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tqdm import tqdm
 
+# List CPUs and GPUs
 from tensorflow.python.client import device_lib
-
 print(device_lib.list_local_devices())
 
-# GPU config
+# GPU config (this has probably no impact on HPU)
 config = ConfigProto()
 config.gpu_options.allow_growth = True
 sess = InteractiveSession(config=config)
@@ -47,24 +49,26 @@ tnp.experimental_enable_numpy_behavior()
 
 class DCGAN:
     def __init__(self):
+        # Make use of HPU
+        self.use_hpu = True
+        if self.use_hpu:
+            self.load_habana_framework()
+
         # Hyperparameters
         self.epochs = 1000
         self.batch_size = 12
-        self.img_size = 256
         self.latent_dim = 256
 
+        self.img_size = 256
         self.img_shape = (self.img_size, self.img_size, 3)
-
-        # Required models for GAN
-        self.disc = None
-        self.gen = None
-        self.combined = None
-
-        # Make use of HPU
-        self.use_hpu = True
 
         # Configurable data type
         self.data_type = np.float32
+
+        # Required models for GAN
+        self.disc = self.discriminator()
+        self.gen = self.generator()
+        self.combined = None
 
         # Save interval for generated samples
         self.save_interval = 10
@@ -221,10 +225,12 @@ class DCGAN:
 
         return X
 
-    def generator(self) -> Model:
+    def generator(self, norm: str = "instance_norm", up_samplings: int = 6) -> Model:
         """
         Generator
         """
+        Norm = self._get_norm_layer(norm)
+
         model = tf.keras.Sequential()
 
         # foundation for 4x4 image
@@ -233,73 +239,33 @@ class DCGAN:
         model.add(LeakyReLU(alpha=0.2))
         model.add(Reshape((4, 4, 128)))
 
-        # upsample to 8x8
-        model.add(
-            Conv2DTranspose(
-                256, kernel_size=3, strides=2, padding="same", use_bias=False
+        dim = 256
+        for _ in range(up_samplings):
+            # upsample
+            dim *= 2
+            model.add(
+                Conv2DTranspose(
+                    dim, kernel_size=3, strides=2, padding="same", use_bias=False
+                )
             )
-        )
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(LeakyReLU(alpha=0.2))
-
-        # upsample to 16x16
-        model.add(
-            Conv2DTranspose(
-                256, kernel_size=3, strides=2, padding="same", use_bias=False
-            )
-        )
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(LeakyReLU(alpha=0.2))
-
-        # upsample to 32x32
-        model.add(
-            Conv2DTranspose(
-                256, kernel_size=3, strides=2, padding="same", use_bias=False
-            )
-        )
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(LeakyReLU(alpha=0.2))
-
-        # upsample to 64x64
-        model.add(
-            Conv2DTranspose(
-                256, kernel_size=3, strides=2, padding="same", use_bias=False
-            )
-        )
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(LeakyReLU(alpha=0.2))
-
-        # upsample to 128x128
-        model.add(
-            Conv2DTranspose(
-                256, kernel_size=3, strides=2, padding="same", use_bias=False
-            )
-        )
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(LeakyReLU(alpha=0.2))
-
-        # upsample to 256x256
-        model.add(
-            Conv2DTranspose(
-                512, kernel_size=3, strides=2, padding="same", use_bias=False
-            )
-        )
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(LeakyReLU(alpha=0.2))
+            model.add(Norm())
+            model.add(LeakyReLU(alpha=0.2))
 
         # output
-        model.add(Conv2D(3, kernel_size=3, activation="tanh", padding="same"))
+        model.add(Flatten())
+        model.add(Dense(1, activation="sigmoid"))
+
+        # cast to float32
+        model.add(tf.cast(model, tf.float32))
 
         model.summary()
 
-        # Input
-        noise = Input(shape=(self.latent_dim,))
-        # Generated image
-        img = model(noise)
+        input = Input(shape=(self.img_size, self.img_size, 3))
+        output = model(input)
 
-        return Model(noise, img)
+        return Model(input, output)
 
-    def discriminator(self) -> Model:
+    def discriminator(self, down_samplings: int = 6) -> Model:
         """
         Discriminator
         """
@@ -317,35 +283,13 @@ class DCGAN:
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.3))
 
-        # downsample 128x128
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 64x64
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 32x32
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 16x16
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 8x8
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 4x4
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.4))
+        dim = 256
+        for _ in range(down_samplings):
+            # downsample
+            dim //= 2
+            model.add(Conv2D(dim, kernel_size=3, strides=2, padding="same"))
+            model.add(LeakyReLU(alpha=0.2))
+            model.add(Dropout(0.3))
 
         # output
         model.add(Flatten())
@@ -381,11 +325,8 @@ class DCGAN:
         # Load the dataset
         X_train = np.stack(data, axis=0)
 
-        # We then loop through a number of epochs to train our Discriminator by first selecting
-        # a random batch of images from our true dataset, generating a set of images from our
-        # Generator, feeding both set of images into our Discriminator, and finally setting the
-        # loss parameters for both the real and fake images, as well as the combined loss.
-
+        # Define a half batch size for the discriminator 
+        # First half for real images, second half for fake images.
         half_batch = int(batch_size / 2)
 
         # Array init for loss logging
@@ -398,6 +339,7 @@ class DCGAN:
         fake = np.zeros((half_batch, 1))
 
         for epoch in range(epochs):
+            # Record time for current epoch
             start = time.time()
 
             # ---------------------
@@ -465,9 +407,6 @@ class DCGAN:
             if epoch % save_interval == 0:
                 self.show_samples(epoch)
 
-            if epoch % 100 == 0:
-                self.save_checkpoint(epoch)
-
             print(f"Time for epoch {epoch + 1} is {time.time()-start} sec")
 
         d_loss_logs_r_a = np.array(d_loss_logs_r)
@@ -513,37 +452,32 @@ class DCGAN:
         plt.tight_layout()
         plt.show()
 
-    def save_checkpoint(self, epoch: int):
-        """
-        Save model checkpoint
-        :param epoch: Used for in the filename for the checkpoint model.
-        """
-        self.gen.save(os.path.join(self.checkpoint_dir, f"{epoch}_checkpoint_model.h5"))
-
-    def setup_hpu(self):
+    def load_habana_framework(self):
         # Load habana module
         from habana_frameworks.tensorflow import load_habana_module
-
         load_habana_module()
 
         # Init horovod
         import horovod.tensorflow.keras as hvd
-
         hvd.init()
 
+    def configure_hpu_dtype(self):
         # Configure computing data type
         self.data_type = tf.bfloat16.as_numpy_dtype  # used for creating training set
         tf.keras.mixed_precision.set_global_policy(
             "mixed_bfloat16"
         )  # used for in the network architecture
 
+        # Replace default TF Instance Normalization with Habana compatible Instance Normalization
+        InstanceNormalization = HabanaInstanceNormalization
+
     def run(self):
         """
         Run DCGAN
         """
-        # Gaudi Config
+        # Set compatible data type for HPU
         if self.use_hpu:
-            self.setup_hpu()
+            self.configure_hpu_dtype()
 
         # Create Dataset
         X = self.create_dataset()
@@ -554,7 +488,6 @@ class DCGAN:
 
         # Build and compile the discriminator first.
         # Generator will be trained as part of the combined model later on.
-        self.disc = self.discriminator()
         self.disc.compile(
             loss="binary_crossentropy",
             optimizer=discriminator_optimizer,
@@ -562,7 +495,6 @@ class DCGAN:
         )
 
         # Since we are only generating (faking) images, we do not track any metrics.
-        self.gen = self.generator()
         self.gen.compile(loss="binary_crossentropy", optimizer=generator_optimizer)
 
         # This builds the Generator and defines the input noise.
@@ -580,12 +512,6 @@ class DCGAN:
         # whether the input is real or not.
         valid = self.disc(img)  # Validity check on the generated image
 
-        # Here we combine the models and also set our loss function and optimizer.
-        # Again, we are only training the generator here.
-        # The ultimate goal here is for the Generator to fool the Discriminator.
-        # The combined model  (stacked generator and discriminator) takes
-        # noise as input => generates images => determines validity
-
         # Create checkpoint model for the adverserial network
         cp_callback = tf.keras.callbacks.ModelCheckpoint(
             filepath=os.path.join(self.checkpoint_dir, "checkpoint.ckpt"),
@@ -597,6 +523,11 @@ class DCGAN:
         # Get the latest checkpoint model
         latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
 
+        # Here we combine the models and also set our loss function and optimizer.
+        # Again, we are only training the generator here.
+        # The ultimate goal here is for the Generator to fool the Discriminator.
+        # The combined model (stacked generator and discriminator) takes
+        # noise as input => generates images => determines validity
         self.combined = Model(z, valid)
         if latest != None:
             self.combined.load_weights(latest)
@@ -617,6 +548,26 @@ class DCGAN:
 
         # Release resources from GPU memory
         K.clear_session()
+
+    def _get_norm_layer(self, norm):
+        if norm == "none":
+            return lambda: lambda x: x
+        elif norm == "batch_norm":
+            return BatchNormalization(momentum=0.8)
+        elif norm == "instance_norm":
+            # Experimental results show that instance normalization performs well on 
+            # style transfer when replacing batch normalization. 
+            # Recently, instance normalization has also been used as a replacement for 
+            # batch normalization in GANs.
+            return InstanceNormalization(
+                axis=3, 
+                center=True, 
+                scale=True,
+                beta_initializer="random_uniform",
+                gamma_initializer="random_uniform"
+            )
+        elif norm == "layer_norm":
+            return LayerNormalization()
 
 
 if __name__ == "__main__":

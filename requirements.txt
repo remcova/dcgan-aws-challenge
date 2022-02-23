@@ -1,0 +1,9 @@
+matplotlib==3.4.3
+pillow==9.0.0
+tensorflow
+tensorflow-addons==0.15.0
+tqdm
+opencv-python
+opendatasets
+pandas
+numpy
