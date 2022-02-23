@@ -219,6 +219,19 @@ class DCGAN:
         """
         Norm = self._get_norm_layer(norm)
 
+        if norm == "instance_norm":
+            Norm(
+                axis=3,
+                center=True,
+                scale=True,
+                beta_initializer="random_uniform",
+                gamma_initializer="random_uniform",
+            )
+        elif norm == "batch_norm":
+            Norm(
+                momentum=0.8
+            )
+
         model = tf.keras.Sequential()
 
         # foundation for 4x4 image
@@ -236,15 +249,7 @@ class DCGAN:
                     dim, kernel_size=3, strides=2, padding="same", use_bias=False
                 )
             )
-            model.add(
-                Norm(
-                    axis=3,
-                    center=True,
-                    scale=True,
-                    beta_initializer="random_uniform",
-                    gamma_initializer="random_uniform",
-                )
-            )
+            model.add(Norm())
             model.add(LeakyReLU(alpha=0.2))
 
         # output
@@ -454,10 +459,6 @@ class DCGAN:
 
         load_habana_module()
 
-        # Init horovod
-        # import horovod.tensorflow.keras as hvd
-        # hvd.init()
-
     def configure_hpu_dtype(self):
         # Configure computing data type
         self.data_type = tf.bfloat16.as_numpy_dtype  # used for creating training set
@@ -555,15 +556,15 @@ class DCGAN:
         if norm == "none":
             return lambda: lambda x: x
         elif norm == "batch_norm":
-            return BatchNormalization(momentum=0.8)
+            return BatchNormalization
         elif norm == "instance_norm":
             # Experimental results show that instance normalization performs well on
             # style transfer when replacing batch normalization.
             # Recently, instance normalization has also been used as a replacement for
             # batch normalization in GANs.
-            return tfa.layers.InstanceNormalization()
+            return tfa.layers.InstanceNormalization
         elif norm == "layer_norm":
-            return LayerNormalization()
+            return LayerNormalization
 
 
 if __name__ == "__main__":
