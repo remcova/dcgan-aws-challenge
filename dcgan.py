@@ -15,7 +15,6 @@ import tensorflow.experimental.numpy as tnp
 import tensorflow_addons as tfa
 
 from habana_frameworks.tensorflow.ops.instance_norm import HabanaInstanceNormalization
-from tensorflow.compat.v1 import ConfigProto, InteractiveSession
 
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import (
@@ -34,18 +33,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tqdm import tqdm
 
-# List CPUs and GPUs
-from tensorflow.python.client import device_lib
-print(device_lib.list_local_devices())
-
-# GPU config (this has probably no impact on HPU)
-config = ConfigProto()
-config.gpu_options.allow_growth = True
-sess = InteractiveSession(config=config)
-
 # Enable numpy behavior for TF
 tnp.experimental_enable_numpy_behavior()
-
 
 class DCGAN:
     def __init__(self):
@@ -458,8 +447,8 @@ class DCGAN:
         load_habana_module()
 
         # Init horovod
-        import horovod.tensorflow.keras as hvd
-        hvd.init()
+        # import horovod.tensorflow.keras as hvd
+        # hvd.init()
 
     def configure_hpu_dtype(self):
         # Configure computing data type
@@ -469,7 +458,7 @@ class DCGAN:
         )  # used for in the network architecture
 
         # Replace default TF Instance Normalization with Habana compatible Instance Normalization
-        tfa.keras.InstanceNormalization = HabanaInstanceNormalization
+        tfa.layers.InstanceNormalization = HabanaInstanceNormalization
 
     def run(self):
         """
@@ -561,7 +550,7 @@ class DCGAN:
             # style transfer when replacing batch normalization. 
             # Recently, instance normalization has also been used as a replacement for 
             # batch normalization in GANs.
-            return tfa.keras.InstanceNormalization(
+            return tfa.layers.InstanceNormalization(
                 axis=3, 
                 center=True, 
                 scale=True,
