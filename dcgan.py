@@ -12,7 +12,7 @@ import opendatasets as od
 import pandas as pd
 import tensorflow as tf
 import tensorflow.experimental.numpy as tnp
-from tensorflow_addons.tfa import InstanceNormalization
+import tensorflow_addons as tfa
 
 from habana_frameworks.tensorflow.ops.instance_norm import HabanaInstanceNormalization
 from tensorflow.compat.v1 import ConfigProto, InteractiveSession
@@ -469,7 +469,7 @@ class DCGAN:
         )  # used for in the network architecture
 
         # Replace default TF Instance Normalization with Habana compatible Instance Normalization
-        InstanceNormalization = HabanaInstanceNormalization
+        tfa.keras.InstanceNormalization = HabanaInstanceNormalization
 
     def run(self):
         """
@@ -561,7 +561,7 @@ class DCGAN:
             # style transfer when replacing batch normalization. 
             # Recently, instance normalization has also been used as a replacement for 
             # batch normalization in GANs.
-            return InstanceNormalization(
+            return tfa.keras.InstanceNormalization(
                 axis=3, 
                 center=True, 
                 scale=True,
