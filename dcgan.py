@@ -213,14 +213,14 @@ class DCGAN:
 
         return X
 
-    def generator(self, norm: str = "instance_norm", up_samplings: int = 6) -> Model:
+    def generator(self, norm: str = 'instance_norm') -> Model:
         """
         Generator
         """
-        Norm = self._get_norm_layer(norm)
+        Normalization = self._get_norm_layer(norm)
 
         if norm == "instance_norm":
-            Norm(
+            Normalization(
                 axis=3,
                 center=True,
                 scale=True,
@@ -228,7 +228,7 @@ class DCGAN:
                 gamma_initializer="random_uniform",
             )
         elif norm == "batch_norm":
-            Norm(
+            Normalization(
                 momentum=0.8
             )
 
@@ -240,28 +240,47 @@ class DCGAN:
         model.add(LeakyReLU(alpha=0.2))
         model.add(Reshape((4, 4, 128)))
 
-        dim = 256
-        for _ in range(up_samplings):
-            # upsample
-            dim *= 2
-            model.add(
-                Conv2DTranspose(
-                    dim, kernel_size=3, strides=2, padding="same", use_bias=False
-                )
-            )
-            model.add(Norm())
-            model.add(LeakyReLU(alpha=0.2))
+        # upsample to 8x8
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 16x16
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 32x32
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 64x64
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 128x128
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 256x256
+        model.add(Conv2DTranspose(512, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
 
         # output
-        model.add(Flatten())
-        model.add(Dense(1, activation="sigmoid"))
+        model.add(Conv2D(3, kernel_size=3, activation="tanh", padding="same"))
 
         model.summary()
 
-        input = Input(shape=(self.img_size, self.img_size, 3))
-        output = model(input)
+        # Input
+        noise = Input(shape=(self.latent_dim,))
+        # Generated image
+        img = model(noise)
 
-        return Model(input, output)
+        return Model(noise, img)
 
     def discriminator(self, down_samplings: int = 6) -> Model:
         """
@@ -270,6 +289,7 @@ class DCGAN:
         model = tf.keras.Sequential()
 
         # input 256x256
+        dim = 256
         model.add(
             Conv2D(
                 128,
@@ -281,7 +301,6 @@ class DCGAN:
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.3))
 
-        dim = 256
         for _ in range(down_samplings):
             # downsample
             dim //= 2
