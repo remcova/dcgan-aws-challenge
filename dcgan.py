@@ -70,11 +70,6 @@ class DCGAN:
         now = datetime.now()
         self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
-        # Get latest checkpoint directory
-        self.latest_checkpoint_dir = max(
-            glob.glob(os.path.join("checkpoints", "*/")), key=os.path.getmtime
-        )
-
         # Create required directories for saving results from this run
         self.model_dir = os.path.join(f"models/{self.datetime}")
         os.mkdir(self.model_dir)
@@ -503,25 +498,28 @@ class DCGAN:
         # whether the input is real or not.
         valid = self.disc(img)  # Validity check on the generated image
 
-        # Create checkpoint model for the adverserial network
-        cp_callback = tf.keras.callbacks.ModelCheckpoint(
-            filepath=os.path.join(self.checkpoint_dir, "checkpoint.ckpt"),
-            verbose=1,
-            save_weights_only=True,
-            save_freq=self.save_checkpoint_interval,
-        )
-
-        # Get the latest checkpoint model
-        latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
-
         # Here we combine the models and also set our loss function and optimizer.
         # Again, we are only training the generator here.
         # The ultimate goal here is for the Generator to fool the Discriminator.
         # The combined model (stacked generator and discriminator) takes
         # noise as input => generates images => determines validity
         self.combined = Model(z, valid)
-        if latest != None:
-            self.combined.load_weights(latest)
+        if self.use_checkpoint:
+            # Create checkpoint model for the adverserial network
+            cp_callback = tf.keras.callbacks.ModelCheckpoint(
+                filepath=os.path.join(self.checkpoint_dir, "checkpoint.ckpt"),
+                verbose=1,
+                save_weights_only=True,
+                save_freq=self.save_checkpoint_interval,
+            )
+            # Get the latest checkpoint model
+            self.latest_checkpoint_dir = max(
+                glob.glob(os.path.join("checkpoints", "*/")), key=os.path.getmtime
+            )
+            latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
+
+            if latest != None:
+                self.combined.load_weights(latest)
         self.combined.compile(
             loss="binary_crossentropy", optimizer=optimizer, callbacks=[cp_callback]
         )
