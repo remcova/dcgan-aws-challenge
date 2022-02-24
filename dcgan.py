@@ -233,13 +233,11 @@ class DCGAN:
                 momentum=0.8
             )
 
-        print(f'Global Policy : {tf.keras.mixed_precision.global_policy()}')
-
         model = tf.keras.Sequential()
 
         # foundation for 4x4 image
         n_nodes = 128 * 4 * 4
-        model.add(Dense(n_nodes, input_dim=self.latent_dim))
+        model.add(Dense(n_nodes, input_dim=self.latent_dim, dtype=tf.keras.mixed_precision.global_policy().compute_dtype))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Reshape((4, 4, 128)))
 
@@ -279,7 +277,8 @@ class DCGAN:
         model.summary()
 
         # Input
-        noise = Input(shape=(self.latent_dim,))
+        noise = Input(shape=(self.latent_dim,), dtype=tf.keras.mixed_precision.global_policy().compute_dtype)
+
         # Generated image
         img = model(noise)
 
@@ -293,47 +292,25 @@ class DCGAN:
 
         print(f'Global Policy : {tf.keras.mixed_precision.global_policy()}')
 
-        # normal 256x256
+        # input 256x256
+        dim = 256
         model.add(
             Conv2D(
                 128,
                 kernel_size=3,
                 padding="same",
-                input_shape=(self.img_size, self.img_size, 3),
+                input_shape=(self.img_size, self.img_size, 3)
             )
         )
         model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
+        model.add(Dropout(0.3, dtype=tf.keras.mixed_precision.global_policy().compute_dtype))
 
-        # downsample 128x128
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 64x64
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 32x32
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 16x16
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 8x8
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
-
-        # downsample 4x4
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.4))
+        for _ in range(down_samplings):
+            # downsample
+            dim //= 2
+            model.add(Conv2D(dim, kernel_size=3, strides=2, padding="same"))
+            model.add(LeakyReLU(alpha=0.2))
+            model.add(Dropout(0.3, dtype=tf.keras.mixed_precision.global_policy().compute_dtype))
 
         # output
         model.add(Flatten())
@@ -341,7 +318,7 @@ class DCGAN:
 
         model.summary()
 
-        input = Input(shape=(self.img_size, self.img_size, 3))
+        input = Input(shape=(self.img_size, self.img_size, 3), dtype=tf.keras.mixed_precision.global_policy().compute_dtype)
         output = model(input)
 
         return Model(input, output)
