@@ -214,7 +214,7 @@ class DCGAN:
 
         return X
 
-    def generator(self, norm: str = 'instance_norm', up_samplings: int = 6) -> Model:
+    def generator(self, norm: str = 'instance_norm') -> Model:
         """
         Generator
         """
@@ -267,7 +267,7 @@ class DCGAN:
         model.add(LeakyReLU(alpha=0.2))
 
         # upsample to 256x256
-        model.add(Conv2DTranspose(128, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(512, kernel_size=3, strides=2, padding="same", use_bias=False))
         model.add(Normalization())
         model.add(LeakyReLU(alpha=0.2))
 
@@ -277,7 +277,7 @@ class DCGAN:
         model.summary()
 
         # Input
-        noise = Input(shape=(self.latent_dim,), dtype=tf.keras.mixed_precision.global_policy().compute_dtype)
+        noise = Input(shape=(self.latent_dim,))
 
         # Generated image
         img = model(noise)
@@ -303,14 +303,14 @@ class DCGAN:
             )
         )
         model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3, dtype=tf.keras.mixed_precision.global_policy().compute_dtype))
+        model.add(Dropout(0.3, dtype='float32'))
 
         for _ in range(down_samplings):
             # downsample
-            dim *= 2
+            dim //= 2
             model.add(Conv2D(dim, kernel_size=3, strides=2, padding="same"))
             model.add(LeakyReLU(alpha=0.2))
-            model.add(Dropout(0.3, dtype=tf.keras.mixed_precision.global_policy().compute_dtype))
+            model.add(Dropout(0.3, dtype='float32'))
 
         # output
         model.add(Flatten())
@@ -318,7 +318,7 @@ class DCGAN:
 
         model.summary()
 
-        input = Input(shape=(self.img_size, self.img_size, 3), dtype=tf.keras.mixed_precision.global_policy().compute_dtype)
+        input = Input(shape=(self.img_size, self.img_size, 3), dtype='float32')
         output = model(input)
 
         return Model(input, output)
@@ -499,7 +499,7 @@ class DCGAN:
         # Create Dataset
         X = self.create_dataset()
 
-        generator_optimizer = Adam(2e-4, beta_1=0.5)
+        generator_optimizer = Adam(4e-4, beta_1=0.5)  # was first 2e-4
         discriminator_optimizer = Adam(2e-4, beta_1=0.5)
         optimizer = Adam(2e-4, beta_1=0.5)
 
