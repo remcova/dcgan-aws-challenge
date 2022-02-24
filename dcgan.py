@@ -243,7 +243,7 @@ class DCGAN:
         model.add(Reshape((4, 4, 128)))
 
         for _ in range(up_samplings):
-            dim *= 2
+            dim //= 2
             # upsample
             model.add(Conv2DTranspose(dim, kernel_size=3, strides=2, padding="same", use_bias=False))
             model.add(Normalization())
@@ -285,7 +285,7 @@ class DCGAN:
 
         for _ in range(down_samplings):
             # downsample
-            dim //= 2
+            dim *= 2
             model.add(Conv2D(dim, kernel_size=3, strides=2, padding="same"))
             model.add(LeakyReLU(alpha=0.2))
             model.add(Dropout(0.3))
