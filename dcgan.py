@@ -247,17 +247,17 @@ class DCGAN:
         model.add(LeakyReLU(alpha=0.2))
 
         # upsample to 16x16
-        model.add(Conv2DTranspose(512, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
         model.add(Normalization())
         model.add(LeakyReLU(alpha=0.2))
 
         # upsample to 32x32
-        model.add(Conv2DTranspose(1024, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
         model.add(Normalization())
         model.add(LeakyReLU(alpha=0.2))
 
         # upsample to 64x64
-        model.add(Conv2DTranspose(512, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
         model.add(Normalization())
         model.add(LeakyReLU(alpha=0.2))
 
@@ -293,7 +293,7 @@ class DCGAN:
         print(f'Global Policy : {tf.keras.mixed_precision.global_policy()}')
 
         # input 256x256
-        dim = 256
+        # dim = 256
         model.add(
             Conv2D(
                 128,
@@ -307,8 +307,8 @@ class DCGAN:
 
         for _ in range(down_samplings):
             # downsample
-            dim //= 2
-            model.add(Conv2D(dim, kernel_size=3, strides=2, padding="same"))
+            # dim //= 2
+            model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
             model.add(LeakyReLU(alpha=0.2))
             model.add(Dropout(0.3, dtype='float32'))
 
