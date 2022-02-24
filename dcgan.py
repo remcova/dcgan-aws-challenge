@@ -36,6 +36,7 @@ from tqdm import tqdm
 # Enable numpy behavior for TF
 tnp.experimental_enable_numpy_behavior()
 
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
 class DCGAN:
     def __init__(self):
@@ -232,6 +233,8 @@ class DCGAN:
                 momentum=0.8
             )
 
+        print(f'Global Policy : {tf.keras.mixed_precision.global_policy()}')
+
         model = tf.keras.Sequential()
 
         # foundation for 4x4 image
@@ -288,8 +291,9 @@ class DCGAN:
         """
         model = tf.keras.Sequential()
 
-        # input 256x256
-        dim = 256
+        print(f'Global Policy : {tf.keras.mixed_precision.global_policy()}')
+
+        # normal 256x256
         model.add(
             Conv2D(
                 128,
@@ -301,12 +305,35 @@ class DCGAN:
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.3))
 
-        for _ in range(down_samplings):
-            # downsample
-            dim //= 2
-            model.add(Conv2D(dim, kernel_size=3, strides=2, padding="same"))
-            model.add(LeakyReLU(alpha=0.2))
-            model.add(Dropout(0.3))
+        # downsample 128x128
+        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Dropout(0.3))
+
+        # downsample 64x64
+        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Dropout(0.3))
+
+        # downsample 32x32
+        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Dropout(0.3))
+
+        # downsample 16x16
+        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Dropout(0.3))
+
+        # downsample 8x8
+        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Dropout(0.3))
+
+        # downsample 4x4
+        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Dropout(0.4))
 
         # output
         model.add(Flatten())
@@ -472,7 +499,6 @@ class DCGAN:
     def load_habana_framework(self):
         # Load habana module
         from habana_frameworks.tensorflow import load_habana_module
-
         load_habana_module()
 
     def configure_hpu_dtype(self):
