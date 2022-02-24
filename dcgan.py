@@ -285,7 +285,7 @@ class DCGAN:
 
         for _ in range(down_samplings):
             # downsample
-            dim *= 2
+            dim //= 2
             model.add(Conv2D(dim, kernel_size=3, strides=2, padding="same"))
             model.add(LeakyReLU(alpha=0.2))
             model.add(Dropout(0.3))
