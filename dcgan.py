@@ -236,18 +236,40 @@ class DCGAN:
         model = tf.keras.Sequential()
 
         # foundation for 4x4 image
-        dim = 128
         n_nodes = 128 * 4 * 4
         model.add(Dense(n_nodes, input_dim=self.latent_dim))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Reshape((4, 4, 128)))
 
-        for _ in range(up_samplings):
-            dim //= 2
-            # upsample
-            model.add(Conv2DTranspose(dim, kernel_size=3, strides=2, padding="same", use_bias=False))
-            model.add(Normalization())
-            model.add(LeakyReLU(alpha=0.2))
+        # upsample to 8x8
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 16x16
+        model.add(Conv2DTranspose(512, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 32x32
+        model.add(Conv2DTranspose(1024, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 64x64
+        model.add(Conv2DTranspose(512, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 128x128
+        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
+
+        # upsample to 256x256
+        model.add(Conv2DTranspose(128, kernel_size=3, strides=2, padding="same", use_bias=False))
+        model.add(Normalization())
+        model.add(LeakyReLU(alpha=0.2))
 
         # output
         model.add(Conv2D(3, kernel_size=3, activation="tanh", padding="same"))
@@ -255,7 +277,7 @@ class DCGAN:
         model.summary()
 
         # Input
-        noise = Input(shape=(self.latent_dim,))
+        noise = Input(shape=(self.latent_dim,), dtype=tf.keras.mixed_precision.global_policy().compute_dtype)
 
         # Generated image
         img = model(noise)
@@ -271,7 +293,7 @@ class DCGAN:
         print(f'Global Policy : {tf.keras.mixed_precision.global_policy()}')
 
         # input 256x256
-        dim = 128
+        dim = 256
         model.add(
             Conv2D(
                 128,
@@ -281,14 +303,14 @@ class DCGAN:
             )
         )
         model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3))
+        model.add(Dropout(0.3, dtype=tf.keras.mixed_precision.global_policy().compute_dtype))
 
         for _ in range(down_samplings):
             # downsample
             dim *= 2
             model.add(Conv2D(dim, kernel_size=3, strides=2, padding="same"))
             model.add(LeakyReLU(alpha=0.2))
-            model.add(Dropout(0.3))
+            model.add(Dropout(0.3, dtype=tf.keras.mixed_precision.global_policy().compute_dtype))
 
         # output
         model.add(Flatten())
@@ -296,7 +318,7 @@ class DCGAN:
 
         model.summary()
 
-        input = Input(shape=(self.img_size, self.img_size, 3))
+        input = Input(shape=(self.img_size, self.img_size, 3), dtype=tf.keras.mixed_precision.global_policy().compute_dtype)
         output = model(input)
 
         return Model(input, output)
