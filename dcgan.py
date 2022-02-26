@@ -36,6 +36,7 @@ from tqdm import tqdm
 # Enable numpy behavior for TF
 tnp.experimental_enable_numpy_behavior()
 
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 
 class DCGAN:
