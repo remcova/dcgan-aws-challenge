@@ -312,6 +312,8 @@ class DCGAN:
         epochs: int = 1000,
         batch_size: int = 12,
         save_interval: int = 10,
+        checkpoint: tf.train.Checkpoint = None,
+        checkpoint_prefix: str = 'ckpt'
     ):
         """
         Training Loop
@@ -410,6 +412,10 @@ class DCGAN:
             # If at save interval -> save generated image samples
             if epoch % save_interval == 0:
                 self.show_samples(epoch)
+
+            # Save checkpoint every X epoch
+            if epoch % self.save_checkpoint_interval == 0:
+                checkpoint.save(file_prefix = checkpoint_prefix)
 
             print(f"Time for epoch {epoch + 1} is {time.time()-start} sec")
 
@@ -527,12 +533,11 @@ class DCGAN:
         self.combined = Model(z, valid)
 
         # Create checkpoint model for the adverserial network
-        cp_callback = tf.keras.callbacks.ModelCheckpoint(
-            filepath=os.path.join(self.checkpoint_dir, "checkpoint.ckpt"),
-            verbose=1,
-            save_weights_only=True,
-            save_freq=self.save_checkpoint_interval,
-        )
+        checkpoint_prefix = os.path.join(self.checkpoint_dir, "ckpt")
+        checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
+                                        discriminator_optimizer=discriminator_optimizer,
+                                        generator=self.gen,
+                                        discriminator=self.disc)
 
         if self.use_checkpoint:
             # Get the latest checkpoint model
@@ -545,7 +550,7 @@ class DCGAN:
                 self.combined.load_weights(latest)
 
         self.combined.compile(
-            loss="binary_crossentropy", optimizer=optimizer, callbacks=[cp_callback]
+            loss="binary_crossentropy", optimizer=optimizer
         )
 
         # Train the network
@@ -554,6 +559,8 @@ class DCGAN:
             epochs=self.epochs,
             batch_size=self.batch_size,
             save_interval=self.save_interval,
+            checkpoint=checkpoint,
+            checkpoint_prefix=checkpoint_prefix
         )
 
         # Save model for future use to generate fake images
