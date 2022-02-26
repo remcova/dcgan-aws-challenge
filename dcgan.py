@@ -469,7 +469,7 @@ class DCGAN:
         
         # When set to True this routine will generate a log with the 
         # device placement of all of the TensorFlow ops in the program.
-        tf.debugging.set_log_device_placement(True)
+        tf.debugging.set_log_device_placement(False)
 
     def configure_hpu_dtype(self):
         # Configure computing data type
