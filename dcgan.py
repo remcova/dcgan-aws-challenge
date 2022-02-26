@@ -46,7 +46,7 @@ class DCGAN:
             self.load_habana_framework()
 
         # Hyperparameters
-        self.epochs = 1000
+        self.epochs = 30000
         self.batch_size = 12
         self.latent_dim = 256
 
@@ -63,10 +63,10 @@ class DCGAN:
 
         # Save interval for generated samples
         self.save_interval = 10
-        self.samples_am = 5
+        self.samples_am = 10
 
         # Use latest model checkpoint
-        self.use_checkpoint = False
+        self.use_checkpoint = True
 
         # Save interval for model checkpoint
         self.save_checkpoint_interval = 25
@@ -214,7 +214,7 @@ class DCGAN:
 
         return X
 
-    def generator(self, norm: str = 'instance_norm') -> Model:
+    def generator(self, norm: str = 'instance_norm', up_samplings: int = 5) -> Model:
         """
         Generator
         """
@@ -241,33 +241,14 @@ class DCGAN:
         model.add(LeakyReLU(alpha=0.2))
         model.add(Reshape((4, 4, 128)))
 
-        # upsample to 8x8
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
-        model.add(Normalization())
-        model.add(LeakyReLU(alpha=0.2))
+        for _ in range(up_samplings):
+            # upsample
+            model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same"))
+            model.add(Normalization())
+            model.add(LeakyReLU(alpha=0.2))
 
-        # upsample to 16x16
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
-        model.add(Normalization())
-        model.add(LeakyReLU(alpha=0.2))
-
-        # upsample to 32x32
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
-        model.add(Normalization())
-        model.add(LeakyReLU(alpha=0.2))
-
-        # upsample to 64x64
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
-        model.add(Normalization())
-        model.add(LeakyReLU(alpha=0.2))
-
-        # upsample to 128x128
-        model.add(Conv2DTranspose(256, kernel_size=3, strides=2, padding="same", use_bias=False))
-        model.add(Normalization())
-        model.add(LeakyReLU(alpha=0.2))
-
-        # upsample to 256x256
-        model.add(Conv2DTranspose(512, kernel_size=3, strides=2, padding="same", use_bias=False))
+        # last upsample to 256x256
+        model.add(Conv2DTranspose(512, kernel_size=3, strides=2, padding="same"))
         model.add(Normalization())
         model.add(LeakyReLU(alpha=0.2))
 
@@ -284,7 +265,7 @@ class DCGAN:
 
         return Model(noise, img)
 
-    def discriminator(self, down_samplings: int = 6) -> Model:
+    def discriminator(self, down_samplings: int = 5) -> Model:
         """
         Discriminator
         """
@@ -292,8 +273,6 @@ class DCGAN:
 
         print(f'Global Policy : {tf.keras.mixed_precision.global_policy()}')
 
-        # input 256x256
-        # dim = 256
         model.add(
             Conv2D(
                 128,
@@ -307,10 +286,13 @@ class DCGAN:
 
         for _ in range(down_samplings):
             # downsample
-            # dim //= 2
             model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
             model.add(LeakyReLU(alpha=0.2))
             model.add(Dropout(0.3, dtype='float32'))
+
+        model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Dropout(0.4, dtype='float32'))
 
         # output
         model.add(Flatten())
@@ -319,6 +301,7 @@ class DCGAN:
         model.summary()
 
         input = Input(shape=(self.img_size, self.img_size, 3), dtype='float32')
+
         output = model(input)
 
         return Model(input, output)
@@ -477,6 +460,10 @@ class DCGAN:
         # Load habana module
         from habana_frameworks.tensorflow import load_habana_module
         load_habana_module()
+        
+        # When set to True this routine will generate a log with the 
+        # device placement of all of the TensorFlow ops in the program.
+        tf.debugging.set_log_device_placement(True)
 
     def configure_hpu_dtype(self):
         # Configure computing data type
@@ -536,15 +523,18 @@ class DCGAN:
         # The ultimate goal here is for the Generator to fool the Discriminator.
         # The combined model (stacked generator and discriminator) takes
         # noise as input => generates images => determines validity
+
         self.combined = Model(z, valid)
+
+        # Create checkpoint model for the adverserial network
+        cp_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join(self.checkpoint_dir, "checkpoint.ckpt"),
+            verbose=1,
+            save_weights_only=True,
+            save_freq=self.save_checkpoint_interval,
+        )
+
         if self.use_checkpoint:
-            # Create checkpoint model for the adverserial network
-            cp_callback = tf.keras.callbacks.ModelCheckpoint(
-                filepath=os.path.join(self.checkpoint_dir, "checkpoint.ckpt"),
-                verbose=1,
-                save_weights_only=True,
-                save_freq=self.save_checkpoint_interval,
-            )
             # Get the latest checkpoint model
             self.latest_checkpoint_dir = max(
                 glob.glob(os.path.join("checkpoints", "*/")), key=os.path.getmtime
@@ -553,13 +543,10 @@ class DCGAN:
 
             if latest != None:
                 self.combined.load_weights(latest)
-            self.combined.compile(
-                loss="binary_crossentropy", optimizer=optimizer, callbacks=[cp_callback]
-            )
-        else:
-            self.combined.compile(
-                loss="binary_crossentropy", optimizer=optimizer
-            )
+
+        self.combined.compile(
+            loss="binary_crossentropy", optimizer=optimizer, callbacks=[cp_callback]
+        )
 
         # Train the network
         self.train(
