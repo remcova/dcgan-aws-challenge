@@ -83,8 +83,8 @@ class DCGAN:
     def is_local_master(self, use_hvd, horovod):
         return use_hvd is False or horovod.local_rank() == 0
 
-    def is_worker_zero(self, horovod):
-        if horovod.rank() != 0:
+    def is_not_worker_zero(self, use_hvd, horovod):
+        if use_hvd is True and horovod.rank() != 0:
             return False
 
     def create_run_folders(self):
@@ -351,8 +351,8 @@ class DCGAN:
         save_interval: int = 10,
         checkpoint: tf.train.Checkpoint = None,
         checkpoint_prefix: str = "ckpt",
-        horovod=None,
-        verbose: bool = False 
+        verbose: bool = False,
+        horovod=None, 
     ):
         """
         Training Loop
@@ -441,7 +441,7 @@ class DCGAN:
 
             # Plot the progress
             accuracy = 100 * d_loss[1]
-            if verbose is False:
+            if verbose == False:
                 print(
                     f"Epoch: {epoch}, [d_avg_loss: {d_loss[0]}, d_loss_fake: {d_loss_fake[0]}, \
                         d_loss_real: {d_loss_real[0]}, acc.: {accuracy}] [generator Loss: {g_loss}]"
@@ -603,7 +603,7 @@ class DCGAN:
             checkpoint=checkpoint,
             checkpoint_prefix=checkpoint_prefix,
             horovod=horovod,
-            verbose=self.is_worker_zero(horovod)
+            verbose=self.is_not_worker_zero(self.use_horovod, horovod)
         )
 
         if self.is_local_master(self.use_horovod, horovod):
