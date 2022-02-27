@@ -73,17 +73,18 @@ class DCGAN:
         now = datetime.now()
         self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
+    def create_run_folders(self):
         # Create required directories for saving results from this run
-        if not os.path.exists(os.path.join(f"models/{self.datetime}")):
-            self.model_dir = os.path.join(f"models/{self.datetime}")
+        self.model_dir = os.path.join(f"models/{self.datetime}")
+        if not os.path.exists(self.model_dir):
             os.mkdir(self.model_dir)
 
-        if not os.path.exists(os.path.join(f"checkpoints/{self.datetime}")):
-            self.checkpoint_dir = os.path.join(f"checkpoints/{self.datetime}")
+        self.checkpoint_dir = os.path.join(f"checkpoints/{self.datetime}")
+        if not os.path.exists(self.checkpoint_dir):
             os.mkdir(self.checkpoint_dir)
 
-        if not os.path.exists(os.path.join(f"generated_samples/{self.datetime}")):
-            self.samples_dir = os.path.join(f"generated_samples/{self.datetime}")
+        self.samples_dir = os.path.join(f"generated_samples/{self.datetime}")
+        if not os.path.exists(self.samples_dir):
             os.mkdir(self.samples_dir)
 
     def download_data(self):
@@ -497,12 +498,16 @@ class DCGAN:
         if self.use_hpu and hvd_is_initialized:
             # Ensure only 1 process downloads the data on each node
             if horovod.local_rank() == 0:
+                self.create_run_folders()
                 X = self.create_dataset()
                 horovod.broadcast(0, 0)
             else:
                 horovod.broadcast(0, 0)
                 X = self.create_dataset()
         else:
+            # Create required directories
+            self.create_run_folders()
+
             # Create dataset
             X = self.create_dataset()
 
