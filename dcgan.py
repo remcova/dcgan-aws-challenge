@@ -36,12 +36,13 @@ from tqdm import tqdm
 # Enable numpy behavior for TF
 tnp.experimental_enable_numpy_behavior()
 
+
 class DCGAN:
-    def __init__(self):
-        # Make use of HPU
-        self.use_hpu = True
-        if self.use_hpu:
-            self.load_habana_framework()
+    def __init__(self, use_hpu=True, use_horovod=True):
+        # HPU
+        self.use_hpu = use_hpu
+        # Horovod
+        self.use_horovod = use_horovod
 
         # Hyperparameters
         self.epochs = 30000
@@ -51,7 +52,7 @@ class DCGAN:
         self.img_size = 256
         self.img_shape = (self.img_size, self.img_size, 3)
 
-        # Configurable data type
+        # Data type
         self.data_type = np.float32
 
         # Required models for GAN
@@ -73,8 +74,12 @@ class DCGAN:
         now = datetime.now()
         self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
+        self.create_run_folders()
+
     def create_run_folders(self):
-        # Create required directories for saving results from this run
+        """
+        Create required directories for saving results from this run
+        """
         self.model_dir = os.path.join(f"models/{self.datetime}")
         if not os.path.exists(self.model_dir):
             os.mkdir(self.model_dir)
@@ -193,7 +198,7 @@ class DCGAN:
 
         return processed_data
 
-    def create_dataset(self) -> np.array:
+    def create_dataset(self, horovod = None) -> np.array:
         # Download Data
         self.download_data()
 
@@ -204,12 +209,25 @@ class DCGAN:
         # Visualize Training Set
         self.show_images(train)
 
-        # Split Training Set into X
-        X = (
-            np.array([i[0] for i in train])
-            .astype(self.data_type)
-            .reshape(-1, self.img_size, self.img_size, 3)
-        )
+        def create_training_set():
+            # Split Training Set into X
+            training_set = (
+                np.array([i[0] for i in train])
+                .astype(self.data_type)
+                .reshape(-1, self.img_size, self.img_size, 3)
+            )
+            return training_set
+
+        # Ensure only 1 process downloads the data on each node
+        if horovod is not None:
+            if horovod.local_rank() == 0:
+                X = create_training_set()
+                horovod.broadcast(0, 0)
+            else:
+                horovod.broadcast(0, 0)
+                X = create_training_set()
+        else:
+            X = create_training_set()
 
         # Normalize Training Data (MinMax Scaling)
         X = self.rescale_data(X)
@@ -217,7 +235,7 @@ class DCGAN:
         # Return created dataset
         return X
 
-    def generator(self, norm: str = 'instance_norm', up_samplings: int = 5) -> Model:
+    def generator(self, norm: str = "instance_norm", up_samplings: int = 5) -> Model:
         """
         Generator
         """
@@ -232,9 +250,7 @@ class DCGAN:
                 gamma_initializer="random_uniform",
             )
         elif norm == "batch_norm":
-            Normalization(
-                momentum=0.8
-            )
+            Normalization(momentum=0.8)
 
         model = tf.keras.Sequential()
 
@@ -274,28 +290,28 @@ class DCGAN:
         """
         model = tf.keras.Sequential()
 
-        print(f'Global Policy : {tf.keras.mixed_precision.global_policy()}')
+        print(f"Global Policy : {tf.keras.mixed_precision.global_policy()}")
 
         model.add(
             Conv2D(
                 128,
                 kernel_size=3,
                 padding="same",
-                input_shape=(self.img_size, self.img_size, 3)
+                input_shape=(self.img_size, self.img_size, 3),
             )
         )
         model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.3, dtype='float32'))
+        model.add(Dropout(0.3, dtype="float32"))
 
         for _ in range(down_samplings):
             # downsample
             model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
             model.add(LeakyReLU(alpha=0.2))
-            model.add(Dropout(0.3, dtype='float32'))
+            model.add(Dropout(0.3, dtype="float32"))
 
         model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
         model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.4, dtype='float32'))
+        model.add(Dropout(0.4, dtype="float32"))
 
         # output
         model.add(Flatten())
@@ -303,7 +319,7 @@ class DCGAN:
 
         model.summary()
 
-        input = Input(shape=(self.img_size, self.img_size, 3), dtype='float32')
+        input = Input(shape=(self.img_size, self.img_size, 3), dtype="float32")
 
         output = model(input)
 
@@ -316,7 +332,8 @@ class DCGAN:
         batch_size: int = 12,
         save_interval: int = 10,
         checkpoint: tf.train.Checkpoint = None,
-        checkpoint_prefix: str = 'ckpt'
+        checkpoint_prefix: str = "ckpt",
+        horovod=None,
     ):
         """
         Training Loop
@@ -324,7 +341,16 @@ class DCGAN:
         :param epochs: Amount of epochs to run
         :param batch_size: Batch Size
         :param save_interval: Used as interval to save generated samples
+        :param checkpoint: Model checkpointing
+        :param checkpoint_prefix: Checkpoint file prefix
+        :param horovod: Horovod init
         """
+        if horovod is not None:
+            # Horovod: broadcast initial variable states from rank0 to all other processes.
+            # This is necessary to ensure consistent initialization of all workers when
+            # training is started with random weights or restored from a checkpoint.
+            horovod.callbacks.BroadcastGlobalVariablesCallback(0)
+
         # Load the dataset
         X_train = np.stack(data, axis=0)
 
@@ -412,7 +438,7 @@ class DCGAN:
 
             # Save checkpoint every X epoch
             if epoch % self.save_checkpoint_interval == 0:
-                checkpoint.save(file_prefix = checkpoint_prefix)
+                checkpoint.save(file_prefix=checkpoint_prefix)
 
             print(f"Time for epoch {epoch + 1} is {time.time()-start} sec")
 
@@ -459,62 +485,37 @@ class DCGAN:
         plt.tight_layout()
         plt.show()
 
-    def load_habana_framework(self):
-        # Load habana module
-        from habana_frameworks.tensorflow import load_habana_module
-        load_habana_module()
-        
-        # When set to True this routine will generate a log with the 
-        # device placement of all of the TensorFlow ops in the program.
-        tf.debugging.set_log_device_placement(False)
-
-    def configure_hpu_dtype(self):
-        # Configure computing data type
-        self.data_type = tf.float32.as_numpy_dtype  # used for creating training set
-        tf.keras.mixed_precision.set_global_policy(
-            "mixed_bfloat16"
-        )  # used for in the network architecture
-
-        # Replace default TF Instance Normalization with Habana compatible Instance Normalization
-        tfa.layers.InstanceNormalization = HabanaInstanceNormalization
-
     def run(self):
         """
         Run DCGAN
         """
-        # Set compatible data type for HPU
+        # Horovod init
         horovod = None
-        if self.use_hpu:
-            self.configure_hpu_dtype()
-            
-            # Import Horovod
+        if self.use_horovod:
             import horovod.tensorflow.keras as horovod
-            #Initialization of Horovod. 
             horovod.init()
-            
-            if horovod.is_initialized() and horovod is not None:
-                hvd_is_initialized = True 
 
-        if self.use_hpu and hvd_is_initialized:
-            # Ensure only 1 process downloads the data on each node
-            if horovod.local_rank() == 0:
-                self.create_run_folders()
-                X = self.create_dataset()
-                horovod.broadcast(0, 0)
-            else:
-                horovod.broadcast(0, 0)
-                X = self.create_dataset()
-        else:
-            # Create required directories
-            self.create_run_folders()
+            # Adjust batch size dynamically by the available Horovod Size
+            self.batch_size = self.batch_size * horovod.size()
 
-            # Create dataset
-            X = self.create_dataset()
+        # Create dataset
+        X = self.create_dataset(horovod=horovod)
+
+        # Change data type if HPU is used
+        if self.use_hpu:
+            self.data_type = tf.float32.as_numpy_dtype
 
         # Setup GAN Optimizers
         generator_optimizer = Adam(2e-4, beta_1=0.5)
         discriminator_optimizer = Adam(2e-4, beta_1=0.5)
-        optimizer = Adam(2e-4, beta_1=0.5)
+
+        # Setup Horovod Optimizer
+        if horovod is not None:
+            optimizer = Adam(2e-4 * horovod.size())
+            if horovod.size() > 1:
+                optimizer = horovod.DistributedOptimizer(optimizer)
+        else:
+            optimizer = Adam(2e-4, beta_1=0.5)
 
         # Build and compile the discriminator first.
         # Generator will be trained as part of the combined model later on.
@@ -540,17 +541,19 @@ class DCGAN:
         self.disc.trainable = False
 
         # Validity check on the generated image
-        valid = self.disc(img)  
+        valid = self.disc(img)
 
         # Here we combine the models and also set our loss function and optimizer.
         self.combined = Model(z, valid)
 
         # Create checkpoint model for the adverserial network
         checkpoint_prefix = os.path.join(self.checkpoint_dir, "ckpt")
-        checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
-                                        discriminator_optimizer=discriminator_optimizer,
-                                        generator=self.gen,
-                                        discriminator=self.disc)
+        checkpoint = tf.train.Checkpoint(
+            generator_optimizer=generator_optimizer,
+            discriminator_optimizer=discriminator_optimizer,
+            generator=self.gen,
+            discriminator=self.disc,
+        )
 
         if self.use_checkpoint:
             # Get the latest checkpoint model
@@ -562,23 +565,13 @@ class DCGAN:
             if latest != None:
                 self.combined.load_weights(latest)
 
-        if self.use_hpu and hvd_is_initialized:
-            # Horovod: broadcast initial variable states from rank0 to all other processes.
-            # This is necessary to ensure consistent initialization of all workers when
-            # training is started with random weights or restored from a checkpoint.
-            horovod.callbacks.BroadcastGlobalVariablesCallback(0)
-
-            # Adjust batch size dynamically by the available Horovod Size
-            self.batch_size = self.batch_size * horovod.size()
-
-            horovod_optimizer = tf.keras.optimizers.SGD(learning_rate=0.01*horovod.size())
-            if horovod.size() > 1:
-                horovod_optimizer = horovod.DistributedOptimizer(horovod_optimizer)
-
         # Compile Combined model
-        self.combined.compile(
-            loss="binary_crossentropy", optimizer=optimizer
-        )
+        self.combined.compile(loss="binary_crossentropy", optimizer=optimizer)
+
+        print(f"Model is compiled, settings hooks")
+
+        if self.use_horovod:
+            horovod.broadcast_variables(self.combined.variables, 0)
 
         # Train the network
         self.train(
@@ -587,11 +580,13 @@ class DCGAN:
             batch_size=self.batch_size,
             save_interval=self.save_interval,
             checkpoint=checkpoint,
-            checkpoint_prefix=checkpoint_prefix
+            checkpoint_prefix=checkpoint_prefix,
+            horovod=horovod,
         )
 
-        # Save model for future use to generate fake images
-        self.gen.save(os.path.join(self.model_dir, "output_model.h5"))
+        if self.use_horovod is False or horovod.local_rank() == 0:
+            # Save model for future use to generate synthetic data
+            self.gen.save(os.path.join(self.model_dir, "output_model.h5"))
 
         # Release resources from GPU memory
         K.clear_session()
@@ -614,4 +609,27 @@ class DCGAN:
 if __name__ == "__main__":
     # Run this file with the following command:
     # mpirun -np 8 python3 dcgan.py
-    DCGAN().run()
+
+    # Args
+    use_hpu = True
+    use_horovod = True
+
+    if use_hpu:
+        # Load Habana module
+        from habana_frameworks.tensorflow import load_habana_module
+
+        load_habana_module()
+
+        # When set to True this routine will generate a log with the
+        # device placement of all of the TensorFlow ops in the program.
+        tf.debugging.set_log_device_placement(False)
+
+        # Configure computing data type
+        tf.keras.mixed_precision.set_global_policy(
+            "mixed_bfloat16"
+        )  # used for in the network architecture
+
+        # Replace default TF Instance Normalization with Habana compatible Instance Normalization
+        tfa.layers.InstanceNormalization = HabanaInstanceNormalization
+
+    DCGAN(use_hpu=use_hpu, use_horovod=use_horovod).run()
