@@ -74,6 +74,9 @@ class DCGAN:
         now = datetime.now()
         self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
+        # Create required folders
+        (self.model_dir, self.checkpoint_dir, self.samples_dir) = self.create_run_folders()
+
     def is_master(self, use_hvd, horovod):
         return use_hvd is False or horovod.rank() == 0
         
@@ -87,23 +90,25 @@ class DCGAN:
         model_path = f"models/{self.datetime}"
         if not os.path.exists(model_path):
             os.mkdir(model_path)
-            self.model_dir = os.path.join(model_path)
+            model_dir = os.path.join(model_path)
         else:
-            self.model_dir = os.path.join(model_path)
+            model_dir = os.path.join(model_path)
 
         checkpoint_path = f"checkpoints/{self.datetime}"
         if not os.path.exists(checkpoint_path):
             os.mkdir(checkpoint_path)
-            self.checkpoint_dir = os.path.join(checkpoint_path)
+            checkpoint_dir = os.path.join(checkpoint_path)
         else:
-            self.checkpoint_dir = os.path.join(checkpoint_path)
+            checkpoint_dir = os.path.join(checkpoint_path)
 
         samples_dir = f"generated_samples/{self.datetime}"
         if not os.path.exists(samples_dir):
             os.mkdir(samples_dir)
-            self.samples_dir = os.path.join(samples_dir)
+            samples_dir = os.path.join(samples_dir)
         else:
-            self.samples_dir = os.path.join(samples_dir)
+            samples_dir = os.path.join(samples_dir)
+
+        return [model_dir, checkpoint_dir, samples_dir]
 
     def download_data(self):
         """
@@ -589,7 +594,7 @@ class DCGAN:
         print(f"Model is compiled, settings hooks")
 
         if self.use_horovod:
-            horovod.broadcast_variables(self.combined.variables, 0)
+            horovod.broadcast(self.combined.variables, 0)
 
         # Train the network
         self.train(
@@ -651,4 +656,5 @@ if __name__ == "__main__":
         # Replace default TF Instance Normalization with Habana compatible Instance Normalization
         tfa.layers.InstanceNormalization = HabanaInstanceNormalization
 
+    # Run DCGAN
     DCGAN(use_hpu=use_hpu, use_horovod=use_horovod).run()
