@@ -493,8 +493,8 @@ class DCGAN:
             self.configure_hpu_dtype()
             
             # Import Horovod
-            from tensorflow.common.horovod_helpers import hvd as horovod
-            # Initialization of Horovod. 
+            import horovod.tensorflow.keras as hvd
+            #Initialization of Horovod. 
             horovod.init()
             
             if horovod.is_initialized() and horovod is not None:
