@@ -213,6 +213,7 @@ class DCGAN:
         # Normalize Training Data (MinMax Scaling)
         X = self.rescale_data(X)
 
+        # Return created dataset
         return X
 
     def generator(self, norm: str = 'instance_norm', up_samplings: int = 5) -> Model:
@@ -492,7 +493,7 @@ class DCGAN:
             self.configure_hpu_dtype()
             
             # Import Horovod
-            from TensorFlow.common.horovod_helpers import hvd as horovod
+            from tensorflow.common.horovod_helpers import hvd as horovod
             # Initialization of Horovod. 
             horovod.init()
             
