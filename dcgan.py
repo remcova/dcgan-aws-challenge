@@ -36,9 +36,6 @@ from tqdm import tqdm
 # Enable numpy behavior for TF
 tnp.experimental_enable_numpy_behavior()
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
-
 class DCGAN:
     def __init__(self):
         # Make use of HPU
@@ -327,12 +324,6 @@ class DCGAN:
         :param batch_size: Batch Size
         :param save_interval: Used as interval to save generated samples
         """
-        if self.use_hpu:
-            # Setting the HABANA_VISIBLE_DEVICES environment variable according to the value of
-            # the CUDA_VISIBLE_DEVICES environment variable upon entry of the train function.
-            # This will ensure that each process runs on a separate HPU.
-            os.environ["HABANA_VISIBLE_DEVICES"] = os.environ["CUDA_VISIBLE_DEVICES"]
-
         # Load the dataset
         X_train = np.stack(data, axis=0)
 
@@ -503,7 +494,7 @@ class DCGAN:
             if horovod.is_initialized() and horovod is not None:
                 hvd_is_initialized = True 
 
-        if hvd_is_initialized:
+        if self.use_hpu and hvd_is_initialized:
             # Ensure only 1 process downloads the data on each node
             if horovod.local_rank() == 0:
                 X = self.create_dataset()
@@ -514,12 +505,6 @@ class DCGAN:
         else:
             # Create dataset
             X = self.create_dataset()
-
-        # Setup HVD Optimizer
-        if self.use_hpu and hvd_is_initialized:
-            horovod_optimizer = tf.keras.optimizers.SGD(learning_rate=0.01*horovod.size())
-            if horovod.size() > 1:
-                horovod_optimizer = horovod.DistributedOptimizer(horovod_optimizer)
 
         # Setup GAN Optimizers
         generator_optimizer = Adam(2e-4, beta_1=0.5)
@@ -580,6 +565,10 @@ class DCGAN:
 
             # Adjust batch size dynamically by the available Horovod Size
             self.batch_size = self.batch_size * horovod.size()
+
+            horovod_optimizer = tf.keras.optimizers.SGD(learning_rate=0.01*horovod.size())
+            if horovod.size() > 1:
+                horovod_optimizer = horovod.DistributedOptimizer(horovod_optimizer)
 
         # Compile Combined model
         self.combined.compile(
