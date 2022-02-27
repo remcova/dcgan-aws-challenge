@@ -74,23 +74,30 @@ class DCGAN:
         now = datetime.now()
         self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
-        self.create_run_folders()
-
     def create_run_folders(self):
         """
         Create required directories for saving results from this run
         """
-        self.model_dir = os.path.join(f"models/{self.datetime}")
-        if not os.path.exists(self.model_dir):
-            os.mkdir(self.model_dir)
+        model_path = f"models/{self.datetime}"
+        if not os.path.exists(model_path):
+            os.mkdir(model_path)
+            self.model_dir = os.path.join(model_path)
+        else:
+            self.model_dir = os.path.join(model_path)
 
-        self.checkpoint_dir = os.path.join(f"checkpoints/{self.datetime}")
-        if not os.path.exists(self.checkpoint_dir):
-            os.mkdir(self.checkpoint_dir)
+        checkpoint_path = f"checkpoints/{self.datetime}"
+        if not os.path.exists(checkpoint_path):
+            os.mkdir(checkpoint_path)
+            self.checkpoint_dir = os.path.join(checkpoint_path)
+        else:
+            self.checkpoint_dir = os.path.join(checkpoint_path)
 
-        self.samples_dir = os.path.join(f"generated_samples/{self.datetime}")
-        if not os.path.exists(self.samples_dir):
-            os.mkdir(self.samples_dir)
+        samples_dir = f"generated_samples/{self.datetime}"
+        if not os.path.exists(samples_dir):
+            os.mkdir(samples_dir)
+            self.samples_dir = os.path.join(samples_dir)
+        else:
+            self.samples_dir = os.path.join(samples_dir)
 
     def download_data(self):
         """
