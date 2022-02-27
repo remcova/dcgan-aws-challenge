@@ -83,6 +83,10 @@ class DCGAN:
     def is_local_master(self, use_hvd, horovod):
         return use_hvd is False or horovod.local_rank() == 0
 
+    def is_worker_zero(self, horovod):
+        if horovod.rank() != 0:
+            return False
+
     def create_run_folders(self):
         """
         Create required directories for saving results from this run
@@ -116,9 +120,6 @@ class DCGAN:
         """
         od.download(
             "https://www.kaggle.com/andrewmvd/ocular-disease-recognition-odir5k"
-        )
-        data_dir = pathlib.Path(
-            "/content/ocular-disease-recognition-odir5k/ODIR-5K/ODIR-5K/Training Images/"
         )
 
     def process_data(self, data_image_list: list, data_folder: str) -> list:
@@ -602,7 +603,7 @@ class DCGAN:
             checkpoint=checkpoint,
             checkpoint_prefix=checkpoint_prefix,
             horovod=horovod,
-            verbose=self.is_master(self.use_horovod, horovod)
+            verbose=self.is_worker_zero(horovod)
         )
 
         if self.is_local_master(self.use_horovod, horovod):
