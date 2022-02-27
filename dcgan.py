@@ -67,7 +67,7 @@ class DCGAN:
         self.samples_am = 10
 
         # Use latest model checkpoint
-        self.use_checkpoint = True
+        self.use_checkpoint = False
 
         # Save interval for model checkpoint
         self.save_checkpoint_interval = 25
