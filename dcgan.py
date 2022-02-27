@@ -518,7 +518,7 @@ class DCGAN:
             self.batch_size = self.batch_size * horovod.size()
 
         # Create required folders
-        if self.is_local_master(self.use_horovod, horovod):
+        if horovod.rank() != 0:
             self.create_run_folders()
             
         # Create dataset
