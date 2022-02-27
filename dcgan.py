@@ -74,6 +74,12 @@ class DCGAN:
         now = datetime.now()
         self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
+    def is_master(self, use_hvd, horovod):
+        return use_hvd is False or horovod.rank() == 0
+        
+    def is_local_master(self, use_hvd, horovod):
+        return use_hvd is False or horovod.local_rank() == 0
+
     def create_run_folders(self):
         """
         Create required directories for saving results from this run
@@ -217,7 +223,6 @@ class DCGAN:
         self.show_images(train)
 
         def create_training_set():
-            # Split Training Set into X
             training_set = (
                 np.array([i[0] for i in train])
                 .astype(self.data_type)
@@ -341,6 +346,7 @@ class DCGAN:
         checkpoint: tf.train.Checkpoint = None,
         checkpoint_prefix: str = "ckpt",
         horovod=None,
+        verbose: bool = False 
     ):
         """
         Training Loop
@@ -429,10 +435,11 @@ class DCGAN:
 
             # Plot the progress
             accuracy = 100 * d_loss[1]
-            print(
-                f"Epoch: {epoch}, [d_avg_loss: {d_loss[0]}, d_loss_fake: {d_loss_fake[0]}, \
-                    d_loss_real: {d_loss_real[0]}, acc.: {accuracy}] [generator Loss: {g_loss}]"
-            )
+            if verbose is False:
+                print(
+                    f"Epoch: {epoch}, [d_avg_loss: {d_loss[0]}, d_loss_fake: {d_loss_fake[0]}, \
+                        d_loss_real: {d_loss_real[0]}, acc.: {accuracy}] [generator Loss: {g_loss}]"
+                )
 
             # Store the losses
             d_loss_logs_r.append([epoch, d_loss[0]])
@@ -505,6 +512,10 @@ class DCGAN:
             # Adjust batch size dynamically by the available Horovod Size
             self.batch_size = self.batch_size * horovod.size()
 
+        # Create required folders
+        if self.is_local_master(self.use_horovod, horovod):
+            self.create_run_folders()
+            
         # Create dataset
         X = self.create_dataset(horovod=horovod)
 
@@ -589,14 +600,16 @@ class DCGAN:
             checkpoint=checkpoint,
             checkpoint_prefix=checkpoint_prefix,
             horovod=horovod,
+            verbose=self.is_master(self.use_horovod, horovod)
         )
 
-        if self.use_horovod is False or horovod.local_rank() == 0:
+        if self.is_local_master(self.use_horovod, horovod):
             # Save model for future use to generate synthetic data
             self.gen.save(os.path.join(self.model_dir, "output_model.h5"))
 
         # Release resources from GPU memory
         K.clear_session()
+
 
     def _get_norm_layer(self, norm):
         if norm == "none":
@@ -611,7 +624,6 @@ class DCGAN:
             return tfa.layers.InstanceNormalization
         elif norm == "layer_norm":
             return LayerNormalization
-
 
 if __name__ == "__main__":
     # Run this file with the following command:
