@@ -593,9 +593,6 @@ class DCGAN:
 
         print(f"Model is compiled, settings hooks")
 
-        if self.use_horovod:
-            horovod.broadcast(self.combined.variables, 0)
-
         # Train the network
         self.train(
             data=X,
