@@ -579,7 +579,7 @@ class DCGAN:
             horovod.callbacks.BroadcastGlobalVariablesCallback(0)
 
             # Adjust batch size dynamically by the available Horovod Size
-            self.batch_size = self.batch_size * horovod.hvd_size()
+            self.batch_size = self.batch_size * horovod.size()
 
         # Compile Combined model
         self.combined.compile(
@@ -618,4 +618,6 @@ class DCGAN:
 
 
 if __name__ == "__main__":
+    # Run this file with the following command:
+    # mpirun -np 8 python3 dcgan.py
     DCGAN().run()
