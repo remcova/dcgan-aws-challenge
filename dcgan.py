@@ -36,6 +36,7 @@ class DCGAN:
         save_interval: int = 10,
         save_num_samples: int = 10,
         restore: bool = False,
+        preview_dataset: bool = False,
         use_hpu=True,
         use_horovod=True,
     ):
@@ -70,6 +71,9 @@ class DCGAN:
 
         # Save interval for model checkpoint
         self.save_checkpoint_interval = 25
+
+        # Preview dataset
+        self.preview_dataset = preview_dataset
 
         # Get date and time of current run
         now = datetime.now()
@@ -189,7 +193,7 @@ class DCGAN:
 
         return processed_data
 
-    def create_dataset(self, horovod=None) -> np.array:
+    def create_dataset(self, horovod = None) -> np.array:
         def load_training_set():
             # Download Data
             self.download_data()
@@ -197,6 +201,10 @@ class DCGAN:
             # Create Training Set
             train = self.prepare_dataset()
             shuffle(train)
+
+            # Preview dataset
+            if self.preview_dataset:
+                preview_dataset(train)
 
             # Prepare training set
             training_set = (
@@ -210,14 +218,12 @@ class DCGAN:
         if horovod is not None:
             if horovod.local_rank() == 0:
                 X = load_training_set()
-                preview_dataset()
                 horovod.broadcast(0, 0)
             else:
                 horovod.broadcast(0, 0)
                 X = load_training_set()
         else:
             X = load_training_set()
-            preview_dataset()
 
         # Normalize Training Data (MinMax Scaling)
         X = self.rescale_data(X)
@@ -506,4 +512,5 @@ if __name__ == "__main__":
         restore=args.restore,
         use_hpu=args.use_hpu,
         use_horovod=args.use_horovod,
+        preview_dataset=args.preview_data
     ).run()

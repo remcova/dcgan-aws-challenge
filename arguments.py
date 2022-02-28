@@ -33,7 +33,14 @@ class DCGANArgParser(argparse.ArgumentParser):
         )
         self.add_argument(
             "--use_horovod",
+            dest="use_horovod",
             help="If set, Horovod will be used for distributed training",
+            action="store_true",
+        )
+        self.add_argument(
+            "--preview_data",
+            dest="preview_data",
+            help="If set, a part of the dataset will be shown",
             action="store_true",
         )
         self.add_argument(
