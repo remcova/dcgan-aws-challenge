@@ -88,8 +88,8 @@ class DCGAN:
         run_path = f"runs/{self.datetime}"
         if os.path.exists(run_path) is False:
             os.mkdir(run_path)
-            os.mkdir(os.mkdir(os.path.join(run_path, "model")))
-            os.mkdir(os.mkdir(os.path.join(run_path, "samples")))
+            os.mkdir(os.path.join(run_path, "model"))
+            os.mkdir(os.path.join(run_path, "samples"))
             run_dir = os.path.join(run_path)
             model_dir = os.path.join(run_path, "model")
             samples_dir = os.path.join(run_path, "samples")
