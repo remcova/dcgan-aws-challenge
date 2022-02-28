@@ -94,11 +94,12 @@ class DCGAN:
             os.mkdir(run_path)
             os.mkdir(os.path.join(run_path, "model"))
             os.mkdir(os.path.join(run_path, "samples"))
-            run_dir = os.path.join(run_path)
-            model_dir = os.path.join(run_path, "model")
-            samples_dir = os.path.join(run_path, "samples")
         else:
             run_dir = os.path.join(run_path)
+
+        run_dir = os.path.join(run_path)
+        model_dir = os.path.join(run_path, "model")
+        samples_dir = os.path.join(run_path, "samples")
 
         if os.path.exists("./checkpoints") is False:
             os.mkdir("./checkpoints")

@@ -1,4 +1,5 @@
 ## My entry for the AWS DL1 Challenge by Devpost
+Author: Remco van Akker
 <br />
 
 # Project name
