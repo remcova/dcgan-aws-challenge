@@ -75,11 +75,15 @@ class DCGAN:
         self.datetime = now.strftime("%d_%m_%Y_%H_%M_%S")
 
         # Create required folders
-        (self.model_dir, self.checkpoint_dir, self.samples_dir) = self.create_run_folders()
+        (
+            self.model_dir,
+            self.checkpoint_dir,
+            self.samples_dir,
+        ) = self.create_run_folders()
 
     def is_master(self, use_hvd, horovod):
         return use_hvd is False or horovod.rank() == 0
-        
+
     def is_local_master(self, use_hvd, horovod):
         return use_hvd is False or horovod.local_rank() == 0
 
@@ -217,7 +221,7 @@ class DCGAN:
 
         return processed_data
 
-    def create_dataset(self, horovod = None) -> np.array:
+    def create_dataset(self, horovod=None) -> np.array:
         # Download Data
         self.download_data()
 
@@ -352,7 +356,7 @@ class DCGAN:
         checkpoint: tf.train.Checkpoint = None,
         checkpoint_prefix: str = "ckpt",
         verbose: bool = False,
-        horovod=None, 
+        horovod=None,
     ):
         """
         Training Loop
@@ -513,6 +517,7 @@ class DCGAN:
         horovod = None
         if self.use_horovod:
             import horovod.tensorflow.keras as horovod
+
             horovod.init()
 
             # Adjust batch size dynamically by the available Horovod Size
@@ -521,7 +526,7 @@ class DCGAN:
         # Create required folders
         if self.is_master(self.use_horovod, horovod):
             self.create_run_folders()
-            
+
         # Create dataset
         X = self.create_dataset(horovod=horovod)
 
@@ -603,7 +608,7 @@ class DCGAN:
             checkpoint=checkpoint,
             checkpoint_prefix=checkpoint_prefix,
             horovod=horovod,
-            verbose=self.is_not_worker_zero(self.use_horovod, horovod)
+            verbose=self.is_not_worker_zero(self.use_horovod, horovod),
         )
 
         if self.is_local_master(self.use_horovod, horovod):
@@ -612,7 +617,6 @@ class DCGAN:
 
         # Release resources from GPU memory
         K.clear_session()
-
 
     def _get_norm_layer(self, norm):
         if norm == "none":
@@ -628,8 +632,9 @@ class DCGAN:
         elif norm == "layer_norm":
             return LayerNormalization
 
+
 if __name__ == "__main__":
-    # Run this file with the following command:
+    # Run this script with the following command IF you want to make use of Horovod for distributed training:
     # mpirun -np 8 python3 dcgan.py
 
     # Args
