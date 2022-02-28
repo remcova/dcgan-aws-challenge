@@ -442,7 +442,7 @@ class DCGAN:
         if self.use_checkpoint:
             # Select latest checkpoint model
             self.latest_checkpoint_dir = max(
-                glob.glob(os.path.join("checkpoints", "*/")), key=os.path.getmtime
+                glob.glob(os.path.join("checkpoints", "*")), key=os.path.getmtime
             )
             latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
 
