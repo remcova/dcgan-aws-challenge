@@ -450,7 +450,9 @@ class DCGAN:
             latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
 
             # Load weights from checkpoint
-            self.combined.load_weights(latest)
+            checkpoint.restore(latest)
+            self.disc = checkpoint.discriminator
+            self.gen = checkpoint.generator
 
         # Compile Combined model
         self.combined.compile(loss="binary_crossentropy", optimizer=optimizer)
