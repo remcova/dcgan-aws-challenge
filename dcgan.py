@@ -444,7 +444,10 @@ class DCGAN:
 
         if self.use_checkpoint:
             # Select latest checkpoint model
-            latest = tf.train.latest_checkpoint(self.checkpoint_dir)
+            self.latest_checkpoint_dir = max(
+                glob.glob(os.path.join("checkpoints", "*/")), key=os.path.getmtime
+            )
+            latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
 
             if latest != None:
                 # Load weights from checkpoint
