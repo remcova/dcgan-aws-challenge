@@ -101,9 +101,11 @@ class DCGAN:
         model_dir = os.path.join(run_path, "model")
         samples_dir = os.path.join(run_path, "samples")
 
-        if os.path.exists("./checkpoints") is False:
-            os.mkdir("./checkpoints")
-        checkpoint_dir = os.path.join("./checkpoints")
+        checkpoint_path = "./checkpoints"
+        if os.path.exists(checkpoint_path) is False:
+            os.mkdir(checkpoint_path)
+            os.mkdir(os.path.join(checkpoint_path, self.datetime))
+        checkpoint_dir = os.path.join(checkpoint_path, self.datetime)
 
         return [run_dir, model_dir, samples_dir, checkpoint_dir]
 
@@ -442,10 +444,7 @@ class DCGAN:
 
         if self.use_checkpoint:
             # Select latest checkpoint model
-            self.latest_checkpoint_dir = max(
-                glob.glob(os.path.join("checkpoints", "*")), key=os.path.getmtime
-            )
-            latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
+            latest = tf.train.latest_checkpoint(self.checkpoint_dir)
 
             if latest != None:
                 # Load weights from checkpoint
