@@ -449,6 +449,8 @@ class DCGAN:
             )
             latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
 
+            print(f'Checkpoint loaded : {latest}')
+
             # Load weights from checkpoint
             checkpoint.restore(latest)
             self.disc = checkpoint.discriminator
