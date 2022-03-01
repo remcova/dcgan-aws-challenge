@@ -449,9 +449,8 @@ class DCGAN:
             )
             latest = tf.train.latest_checkpoint(self.latest_checkpoint_dir)
 
-            if latest != None:
-                # Load weights from checkpoint
-                self.combined.load_weights(latest)
+            # Load weights from checkpoint
+            self.combined.load_weights(latest, by_name=True)
 
         # Compile Combined model
         self.combined.compile(loss="binary_crossentropy", optimizer=optimizer)
