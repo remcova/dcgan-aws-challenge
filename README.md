@@ -21,3 +21,5 @@ python3 dcgan.py --use_hpu --restore
 
 ### Download Dataset
 You don't have to download anything manual, just replace the kaggle.json file with your own and the application will use your Kaggle API Key to download the dataset.
+
+Dataset source: https://www.kaggle.com/andrewmvd/ocular-disease-recognition-odir5k
