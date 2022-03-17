@@ -1,5 +1,5 @@
 matplotlib==3.4.3
-pillow==9.0.0
+pillow==9.0.1
 tensorflow
 tensorflow-addons==0.15.0
 tqdm
